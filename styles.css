@@ -1,0 +1,518 @@
+:root {
+  --bg-0: #020617;
+  --bg-1: #0f172a;
+  --bg-2: #1e293b;
+  --ink-0: #e2e8f0;
+  --ink-1: #94a3b8;
+  --line: #38bdf8;
+  --danger: #ef4444;
+  --panel: #0b1220;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+  color: var(--ink-0);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(14, 116, 144, 0.35) 0%, transparent 42%),
+    radial-gradient(circle at 90% 10%, rgba(30, 64, 175, 0.28) 0%, transparent 36%),
+    linear-gradient(130deg, var(--bg-0), var(--bg-1));
+}
+
+.app-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.toolbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.75);
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+.toolbar h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+}
+
+.help-fab {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 32;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(14, 116, 144, 0.92);
+  color: #e2e8f0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.48);
+}
+
+.help-fab:hover {
+  background: rgba(8, 145, 178, 0.96);
+}
+
+.shortcut-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.shortcut-panel.visible {
+  display: flex;
+}
+
+.shortcut-card {
+  width: min(660px, calc(100vw - 30px));
+  max-height: min(80vh, 760px);
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(71, 85, 105, 0.8);
+  background: rgba(2, 6, 23, 0.95);
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.66);
+  padding: 14px;
+}
+
+.shortcut-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.shortcut-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.shortcut-close-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.92);
+  color: #fff;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.shortcut-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.shortcut-list span {
+  color: var(--ink-1);
+  font-size: 0.86rem;
+  text-align: right;
+}
+
+kbd {
+  border: 1px solid rgba(125, 211, 252, 0.6);
+  border-radius: 6px;
+  padding: 3px 7px;
+  background: rgba(30, 41, 59, 0.95);
+  color: #e2e8f0;
+  font-size: 0.79rem;
+  white-space: nowrap;
+}
+
+.toolbar button {
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  padding: 8px 11px;
+  cursor: pointer;
+}
+
+#editor {
+  cursor: grab;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  background-color: #020617;
+  background-image:
+    linear-gradient(to right, rgba(51, 65, 85, 0.45) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(51, 65, 85, 0.45) 1px, transparent 1px);
+  background-size: 28px 28px;
+  touch-action: none;
+}
+
+#editor.panning {
+  cursor: grabbing;
+}
+
+#editor.lassoing {
+  cursor: crosshair;
+}
+
+#connections,
+#nodes-layer {
+  position: absolute;
+  inset: 0;
+}
+
+#connections {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.connection {
+  stroke: var(--line);
+  stroke-width: 3;
+  fill: none;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.35));
+}
+
+.connection.preview {
+  stroke-dasharray: 7;
+  opacity: 0.6;
+}
+
+.node {
+  position: absolute;
+  width: 170px;
+  min-height: 95px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: var(--panel);
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.62);
+  padding: 10px 12px;
+  user-select: none;
+  cursor: move;
+  transition: box-shadow 140ms ease;
+}
+
+.node.near {
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35), 0 10px 24px rgba(2, 6, 23, 0.68);
+}
+
+.node.selected {
+  border-color: rgba(224, 242, 254, 0.95);
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.62), 0 12px 26px rgba(2, 6, 23, 0.72);
+}
+
+.node-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+}
+
+.node-title[contenteditable="true"] {
+  cursor: text;
+  user-select: text;
+  outline: none;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin: -2px -4px 4px;
+}
+
+.node-title[contenteditable="true"]:focus {
+  background: rgba(30, 41, 59, 0.92);
+  box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.65);
+}
+
+.node-content {
+  font-size: 0.8rem;
+  color: var(--ink-1);
+}
+
+.node-content[contenteditable="true"] {
+  cursor: text;
+  user-select: text;
+  outline: none;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
+
+.node-content[contenteditable="true"]:focus {
+  background: rgba(30, 41, 59, 0.92);
+  box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.5);
+}
+
+.node-delete-btn {
+  position: absolute;
+  right: -9px;
+  top: -9px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 130ms ease, transform 130ms ease;
+}
+
+.node.near .node-delete-btn,
+.node:hover .node-delete-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--line);
+  cursor: crosshair;
+  appearance: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.node.near .handle,
+.node:hover .handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.handle-top {
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.handle-right {
+  right: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.handle-bottom {
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.handle-left {
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.line-delete-btn {
+  position: absolute;
+  display: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 10px rgba(2, 6, 23, 0.68);
+}
+
+.line-delete-btn.visible {
+  display: block;
+}
+
+#lasso-box {
+  position: absolute;
+  display: none;
+  border: 1px dashed rgba(125, 211, 252, 0.95);
+  background: rgba(56, 189, 248, 0.18);
+  pointer-events: none;
+  z-index: 18;
+}
+
+#lasso-box.visible {
+  display: block;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 40;
+  display: none;
+  min-width: 170px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(71, 85, 105, 0.75);
+  background: rgba(2, 6, 23, 0.94);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.context-menu.visible {
+  display: grid;
+  gap: 4px;
+}
+
+.context-menu button {
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--ink-0);
+  text-align: left;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.context-menu button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#navigator {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 25;
+  width: 220px;
+  height: 142px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(2, 6, 23, 0.82);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.5);
+  overflow: hidden;
+  cursor: crosshair;
+  backdrop-filter: blur(4px);
+  touch-action: none;
+}
+
+#navigator.navigating {
+  cursor: grabbing;
+}
+
+#navigator-map {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background:
+    linear-gradient(to right, rgba(51, 65, 85, 0.22) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(51, 65, 85, 0.22) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.navigator-node {
+  fill: rgba(59, 130, 246, 0.45);
+  stroke: rgba(125, 211, 252, 0.92);
+  stroke-width: 1;
+}
+
+.navigator-node.in-view {
+  fill: rgba(56, 189, 248, 0.75);
+  stroke: rgba(224, 242, 254, 0.95);
+}
+
+.navigator-connection {
+  stroke: rgba(56, 189, 248, 0.28);
+  stroke-width: 1;
+  fill: none;
+}
+
+#navigator-view {
+  position: absolute;
+  border: 1.5px solid rgba(248, 250, 252, 0.9);
+  background: rgba(148, 163, 184, 0.1);
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .toolbar {
+    top: 10px;
+    left: 10px;
+    padding: 10px 12px;
+  }
+
+  .help-fab {
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .shortcut-card {
+    width: calc(100vw - 20px);
+    max-height: 84vh;
+    padding: 10px;
+  }
+
+  .shortcut-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .shortcut-list span {
+    text-align: left;
+  }
+
+  #editor {
+    min-height: 100vh;
+  }
+
+  .node {
+    width: 145px;
+  }
+
+  #navigator {
+    right: 10px;
+    bottom: 10px;
+    width: 180px;
+    height: 116px;
+  }
+}

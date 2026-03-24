@@ -9,34 +9,98 @@
   <body>
     <main class="app-shell">
       <header class="toolbar">
-        <h1>節點編輯器</h1>
+        <button id="save-project-btn" type="button">存檔</button>
+        <button id="load-project-btn" type="button">讀檔</button>
+        <button id="load-legacy-btn" type="button">開啟舊檔</button>
+        <button id="set-media-path-btn" type="button">設置路徑</button>
+        <div id="defined-node-menu" class="defined-node-menu">
+          <button id="defined-node-menu-btn" type="button" aria-expanded="false" aria-controls="defined-node-panel">
+            已定義節點
+          </button>
+          <section id="defined-node-panel" class="defined-node-panel" aria-hidden="true">
+            <header class="defined-node-panel-header">
+              <h2>類型列表</h2>
+              <span id="defined-node-count">0 類</span>
+            </header>
+            <div id="defined-node-list" class="defined-node-list"></div>
+          </section>
+        </div>
       </header>
-      <button id="help-fab" class="help-fab" type="button" aria-label="開啟快捷鍵說明">?</button>
+      <button id="help-fab" class="help-fab" type="button" aria-label="開啟快捷鍵編輯">⚙</button>
       <section id="shortcut-panel" class="shortcut-panel" aria-hidden="true">
         <div class="shortcut-card" role="dialog" aria-modal="true" aria-labelledby="shortcut-title">
           <header class="shortcut-header">
-            <h2 id="shortcut-title">快捷鍵說明</h2>
-            <button id="shortcut-close-btn" class="shortcut-close-btn" type="button" aria-label="關閉快捷鍵說明">
+            <h2 id="shortcut-title">快捷鍵編輯</h2>
+            <button id="shortcut-close-btn" class="shortcut-close-btn" type="button" aria-label="關閉快捷鍵編輯">
               ×
             </button>
           </header>
-          <ul class="shortcut-list">
-            <li><kbd>Ctrl/Cmd + N</kbd><span>在視窗中心新增節點</span></li>
-            <li><kbd>Ctrl/Cmd + A</kbd><span>全選節點</span></li>
-            <li><kbd>Ctrl/Cmd + 點擊</kbd><span>切換節點多選</span></li>
-            <li><kbd>Ctrl/Cmd + C / X / V</kbd><span>複製 / 剪下 / 貼上</span></li>
-            <li><kbd>Ctrl/Cmd + D</kbd><span>複製一份</span></li>
-            <li><kbd>Delete / Backspace</kbd><span>刪除選取節點（或 hover 連線）</span></li>
-            <li><kbd>Ctrl/Cmd + Z</kbd><span>復原</span></li>
-            <li><kbd>Ctrl/Cmd + Shift + Z</kbd><span>重做</span></li>
-            <li><kbd>Ctrl/Cmd + Y</kbd><span>重做（替代）</span></li>
-            <li><kbd>Ctrl/Cmd + +/-/0</kbd><span>放大 / 縮小 / 重設縮放</span></li>
-            <li><kbd>F</kbd><span>聚焦目前選取或全部內容</span></li>
-            <li><kbd>方向鍵</kbd><span>移動選取節點（Shift 為大步距）</span></li>
-            <li><kbd>Ctrl/Cmd + 拖曳</kbd><span>套索框選</span></li>
-            <li><kbd>右鍵</kbd><span>開啟功能選單</span></li>
-            <li><kbd>Esc</kbd><span>關閉面板或取消目前操作</span></li>
-          </ul>
+          <p class="shortcut-editor-hint">點「變更」後按下想綁定的按鍵組合。按「清除」可移除綁定。</p>
+          <div id="shortcut-editor-list" class="shortcut-editor-list"></div>
+          <footer class="shortcut-editor-footer">
+            <button id="shortcut-reset-btn" type="button">重設預設</button>
+          </footer>
+        </div>
+      </section>
+      <section id="json-editor-panel" class="json-editor-panel" aria-hidden="true">
+        <div class="json-editor-card" role="dialog" aria-modal="true" aria-labelledby="json-editor-title">
+          <header class="json-editor-header">
+            <h2 id="json-editor-title">媒體 JSON 編輯</h2>
+            <button id="json-editor-close-btn" class="json-editor-close-btn" type="button" aria-label="關閉 JSON 編輯">
+              ×
+            </button>
+          </header>
+          <textarea id="json-editor-textarea" spellcheck="false"></textarea>
+          <div id="json-editor-functional-controls" class="json-editor-functional-controls" hidden></div>
+          <footer class="json-editor-footer">
+            <button id="json-editor-cancel-btn" type="button">取消</button>
+            <button id="json-editor-save-btn" type="button">儲存</button>
+          </footer>
+        </div>
+      </section>
+      <section id="node-text-editor-panel" class="node-text-editor-panel" aria-hidden="true">
+        <div class="node-text-editor-card" role="dialog" aria-modal="true" aria-labelledby="node-text-editor-title">
+          <header class="node-text-editor-header">
+            <h2 id="node-text-editor-title">節點文字編輯</h2>
+            <button
+              id="node-text-editor-close-btn"
+              class="node-text-editor-close-btn"
+              type="button"
+              aria-label="關閉節點文字編輯"
+            >
+              ×
+            </button>
+          </header>
+          <div class="node-text-editor-fields">
+            <label for="node-text-editor-title-input">標題</label>
+            <input id="node-text-editor-title-input" type="text" spellcheck="false" />
+            <label for="node-text-editor-content-textarea">內容</label>
+            <textarea id="node-text-editor-content-textarea" spellcheck="false"></textarea>
+          </div>
+          <footer class="node-text-editor-footer">
+            <div class="node-text-editor-footer-left">
+              <button id="node-text-editor-edit-json-btn" type="button">編輯JSON</button>
+              <button id="node-text-editor-define-json-btn" type="button">定義JSON</button>
+            </div>
+            <div class="node-text-editor-footer-right">
+              <button id="node-text-editor-cancel-btn" type="button">取消</button>
+              <button id="node-text-editor-save-btn" type="button">儲存</button>
+            </div>
+          </footer>
+        </div>
+      </section>
+      <section id="media-viewer-panel" class="media-viewer-panel" aria-hidden="true">
+        <div class="media-viewer-card" role="dialog" aria-modal="true" aria-labelledby="media-viewer-title">
+          <header class="media-viewer-header">
+            <h2 id="media-viewer-title">媒體預覽</h2>
+            <button id="media-viewer-close-btn" class="media-viewer-close-btn" type="button" aria-label="關閉媒體預覽">
+              ×
+            </button>
+          </header>
+          <div id="media-viewer-meta" class="media-viewer-meta"></div>
+          <div id="media-viewer-body" class="media-viewer-body">
+            <p class="media-viewer-empty">請點擊節點中的媒體縮圖以預覽。</p>
+          </div>
         </div>
       </section>
 
@@ -50,6 +114,8 @@
           <button type="button" data-action="cut" role="menuitem">剪下</button>
           <button type="button" data-action="paste" role="menuitem">貼上</button>
           <button type="button" data-action="duplicate" role="menuitem">複製一份</button>
+          <button type="button" data-action="edit-json" role="menuitem">編輯JSON</button>
+          <button type="button" data-action="define-node" role="menuitem">定義結點</button>
           <button type="button" data-action="delete" role="menuitem">刪除</button>
           <button type="button" data-action="select-all" role="menuitem">全選</button>
           <button type="button" data-action="fit-view" role="menuitem">聚焦內容</button>
@@ -69,10 +135,6 @@
         <button class="node-delete-btn" type="button" aria-label="刪除節點">×</button>
         <div class="node-title">節點</div>
         <div class="node-content">拖曳節點或拉線連接</div>
-        <button class="handle handle-top" data-side="top" type="button" aria-label="上方連接點"></button>
-        <button class="handle handle-right" data-side="right" type="button" aria-label="右方連接點"></button>
-        <button class="handle handle-bottom" data-side="bottom" type="button" aria-label="下方連接點"></button>
-        <button class="handle handle-left" data-side="left" type="button" aria-label="左方連接點"></button>
       </article>
     </template>
 

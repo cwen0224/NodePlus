@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>無限筆記</title>
-  <link rel="stylesheet" href="./styles.css?v=20260324-6" />
+  <link rel="stylesheet" href="./styles.css?v=20260324-7" />
   </head>
   <body>
     <main class="app-shell">
@@ -132,6 +132,30 @@
           </footer>
         </div>
       </section>
+      <section id="connection-key-prompt-panel" class="connection-key-prompt-panel" aria-hidden="true">
+        <div class="connection-key-prompt-card" role="dialog" aria-modal="true" aria-labelledby="connection-key-prompt-title">
+          <header class="connection-key-prompt-header">
+            <h2 id="connection-key-prompt-title">命名連線</h2>
+            <button
+              id="connection-key-prompt-close-btn"
+              class="connection-key-prompt-close-btn"
+              type="button"
+              aria-label="關閉命名連線"
+            >
+              ×
+            </button>
+          </header>
+          <p class="connection-key-prompt-hint">這個名稱會成為 JSON 的 key。</p>
+          <label for="connection-key-prompt-input">連線名稱</label>
+          <input id="connection-key-prompt-input" type="text" spellcheck="false" autocomplete="off" />
+          <label for="connection-key-prompt-history">歷史命名紀錄</label>
+          <select id="connection-key-prompt-history" size="6"></select>
+          <footer class="connection-key-prompt-footer">
+            <button id="connection-key-prompt-cancel-btn" type="button">取消</button>
+            <button id="connection-key-prompt-confirm-btn" type="button">建立連線</button>
+          </footer>
+        </div>
+      </section>
       <section id="media-viewer-panel" class="media-viewer-panel" aria-hidden="true">
         <div class="media-viewer-card" role="dialog" aria-modal="true" aria-labelledby="media-viewer-title">
           <header class="media-viewer-header">
@@ -181,6 +205,6 @@
       </article>
     </template>
 
-  <script src="./app.js?v=20260324-5" defer></script>
+  <script src="./app.js?v=20260324-6" defer></script>
   </body>
 </html>

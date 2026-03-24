@@ -49,6 +49,12 @@ const nodeTextEditorEditJsonBtn = document.getElementById("node-text-editor-edit
 const nodeTextEditorDefineJsonBtn = document.getElementById("node-text-editor-define-json-btn");
 const nodeTextEditorCancelBtn = document.getElementById("node-text-editor-cancel-btn");
 const nodeTextEditorSaveBtn = document.getElementById("node-text-editor-save-btn");
+const connectionKeyPromptPanelEl = document.getElementById("connection-key-prompt-panel");
+const connectionKeyPromptCloseBtn = document.getElementById("connection-key-prompt-close-btn");
+const connectionKeyPromptInput = document.getElementById("connection-key-prompt-input");
+const connectionKeyPromptHistorySelect = document.getElementById("connection-key-prompt-history");
+const connectionKeyPromptCancelBtn = document.getElementById("connection-key-prompt-cancel-btn");
+const connectionKeyPromptConfirmBtn = document.getElementById("connection-key-prompt-confirm-btn");
 const mediaViewerPanelEl = document.getElementById("media-viewer-panel");
 const mediaViewerCloseBtn = document.getElementById("media-viewer-close-btn");
 const mediaViewerTitleEl = document.getElementById("media-viewer-title");
@@ -87,6 +93,7 @@ const PROJECT_STATE_SCHEMA = "node-editor.project";
 const PROJECT_STATE_VERSION = 1;
 const PROJECT_STATE_FILE = "project-state.json";
 const PROJECT_DRAFT_STORAGE_KEY = "node-editor.project-draft.v1";
+const CONNECTION_KEY_HISTORY_STORAGE_KEY = "node-editor.connection-key-history.v1";
 const GIT_SYNC_STORAGE_KEY = "node-editor.git-sync.v1";
 const GIT_SYNC_DEBOUNCE_MS = 1800;
 const GIT_SYNC_DEFAULT_COMMIT_MESSAGE = "chore(editor): autosave project-state.json";
@@ -165,6 +172,8 @@ const state = {
   jsonEditorSelectionNodeIds: [],
   jsonEditorFunctionalConfig: null,
   nodeTextEditorNodeId: null,
+  connectionKeyPrompt: null,
+  connectionKeyHistory: [],
   mediaViewerNodeId: null,
   mediaViewerObjectUrl: null,
   draggedNodeMoved: false,
@@ -243,6 +252,13 @@ async function bootstrap() {
   nodeTextEditorContentTextarea.addEventListener("input", onNodeTextEditorInput);
   nodeTextEditorContentTextarea.addEventListener("keydown", onNodeTextEditorKeyDown);
   nodeTextEditorTitleInput.addEventListener("keydown", onNodeTextEditorKeyDown);
+  connectionKeyPromptPanelEl?.addEventListener("pointerdown", onConnectionKeyPromptPanelPointerDown);
+  connectionKeyPromptCloseBtn?.addEventListener("click", hideConnectionKeyPrompt);
+  connectionKeyPromptCancelBtn?.addEventListener("click", hideConnectionKeyPrompt);
+  connectionKeyPromptConfirmBtn?.addEventListener("click", confirmConnectionKeyPrompt);
+  connectionKeyPromptInput?.addEventListener("keydown", onConnectionKeyPromptInputKeyDown);
+  connectionKeyPromptInput?.addEventListener("input", onConnectionKeyPromptInputChange);
+  connectionKeyPromptHistorySelect?.addEventListener("change", onConnectionKeyPromptHistoryChange);
   gitSyncBtn?.addEventListener("click", () => toggleGitSyncPanel());
   gitSyncCloseBtn?.addEventListener("click", hideGitSyncPanel);
   gitSyncCloseFooterBtn?.addEventListener("click", hideGitSyncPanel);
@@ -286,6 +302,7 @@ async function bootstrap() {
   });
 
   initializeShortcutBindings();
+  initializeConnectionKeyHistoryFromStorage();
   await initializeGitSyncFromStorage();
   initializeMediaPathFromStorage();
   renderDefinedNodeTypeList();
@@ -566,6 +583,16 @@ function parseHandleSideReference(value) {
 function normalizeHandleSideKey(value) {
   const parsed = parseHandleSideReference(value);
   return parsed ? parsed.key : null;
+}
+
+function normalizeConnectionKey(value) {
+  const key = String(value ?? "").trim();
+  return key.length > 0 ? key : "";
+}
+
+function buildFallbackConnectionKey(connectionId) {
+  const normalizedId = String(connectionId ?? "").trim();
+  return normalizedId ? `link_${normalizedId}` : "link";
 }
 
 function isValidHandleSideReference(value) {
@@ -3044,20 +3071,15 @@ function finishLinkTo(nodeId, side) {
     return false;
   }
 
-  const created = createConnection({
+  state.linking = null;
+  clearPreviewPath();
+  openConnectionKeyPrompt({
     fromNodeId,
     fromSide,
     toNodeId: nodeId,
     toSide: normalizedSide,
   });
-
-  state.linking = null;
-  clearPreviewPath();
-  renderConnections();
-  if (created) {
-    commitHistory();
-  }
-  return created;
+  return true;
 }
 
 function findClosestHandle(worldPoint, excludeNodeId, excludeSide) {
@@ -3089,11 +3111,22 @@ function findClosestHandle(worldPoint, excludeNodeId, excludeSide) {
 function createConnection(link) {
   const fromSide = normalizeHandleSideKey(link.fromSide);
   const toSide = normalizeHandleSideKey(link.toSide);
+  const key = normalizeConnectionKey(link.key);
   if (!fromSide || !toSide) {
+    return false;
+  }
+  if (!key) {
     return false;
   }
 
   if (link.fromNodeId === link.toNodeId) {
+    return false;
+  }
+
+  const sameSourceKeyExists = state.connections.some(
+    (connection) => connection.fromNodeId === link.fromNodeId && normalizeConnectionKey(connection.key) === key
+  );
+  if (sameSourceKeyExists) {
     return false;
   }
 
@@ -3122,6 +3155,7 @@ function createConnection(link) {
     ...link,
     fromSide,
     toSide,
+    key,
   });
   refreshBindingNodes();
   return true;
@@ -4196,8 +4230,13 @@ function showNodeTextEditor(nodeId) {
       : "";
   nodeTextEditorPanelEl.classList.add("visible");
   nodeTextEditorPanelEl.setAttribute("aria-hidden", "false");
-  nodeTextEditorTitleInput.focus();
-  nodeTextEditorTitleInput.select();
+  if (nodeTextEditorContentTextarea.readOnly) {
+    nodeTextEditorTitleInput.focus();
+    nodeTextEditorTitleInput.select();
+  } else {
+    nodeTextEditorContentTextarea.focus();
+    nodeTextEditorContentTextarea.setSelectionRange(nodeTextEditorContentTextarea.value.length, nodeTextEditorContentTextarea.value.length);
+  }
 }
 
 function onNodeTextEditorInput() {
@@ -4245,6 +4284,185 @@ function hideNodeTextEditor() {
   nodeTextEditorContentTextarea.value = "";
   nodeTextEditorContentTextarea.readOnly = false;
   nodeTextEditorContentTextarea.title = "";
+}
+
+function openConnectionKeyPrompt(link) {
+  if (!link) {
+    return;
+  }
+  state.connectionKeyPrompt = {
+    ...link,
+    openedAt: Date.now(),
+  };
+  renderConnectionKeyPromptHistory();
+  if (connectionKeyPromptInput) {
+    const fallback = String(link.key ?? "").trim() || "";
+    connectionKeyPromptInput.value = fallback;
+  }
+  connectionKeyPromptPanelEl?.classList.add("visible");
+  connectionKeyPromptPanelEl?.setAttribute("aria-hidden", "false");
+  connectionKeyPromptInput?.focus();
+  connectionKeyPromptInput?.select();
+  updateConnectionKeyPromptState();
+}
+
+function hideConnectionKeyPrompt() {
+  state.connectionKeyPrompt = null;
+  connectionKeyPromptPanelEl?.classList.remove("visible");
+  connectionKeyPromptPanelEl?.setAttribute("aria-hidden", "true");
+  if (connectionKeyPromptInput) {
+    connectionKeyPromptInput.value = "";
+  }
+  if (connectionKeyPromptHistorySelect) {
+    connectionKeyPromptHistorySelect.selectedIndex = -1;
+  }
+}
+
+function onConnectionKeyPromptPanelPointerDown(event) {
+  if (event.target === connectionKeyPromptPanelEl) {
+    hideConnectionKeyPrompt();
+  }
+}
+
+function onConnectionKeyPromptInputKeyDown(event) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    hideConnectionKeyPrompt();
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    confirmConnectionKeyPrompt();
+  }
+}
+
+function onConnectionKeyPromptInputChange() {
+  updateConnectionKeyPromptState();
+}
+
+function onConnectionKeyPromptHistoryChange() {
+  if (!connectionKeyPromptInput || !connectionKeyPromptHistorySelect) {
+    return;
+  }
+  const value = connectionKeyPromptHistorySelect.value;
+  if (!value) {
+    return;
+  }
+  connectionKeyPromptInput.value = value;
+  connectionKeyPromptInput.focus();
+  connectionKeyPromptInput.select();
+  updateConnectionKeyPromptState();
+}
+
+function updateConnectionKeyPromptState() {
+  if (!connectionKeyPromptConfirmBtn || !connectionKeyPromptInput) {
+    return;
+  }
+  connectionKeyPromptConfirmBtn.disabled = String(connectionKeyPromptInput.value ?? "").trim() === "";
+}
+
+function confirmConnectionKeyPrompt() {
+  const pending = state.connectionKeyPrompt;
+  if (!pending) {
+    hideConnectionKeyPrompt();
+    return false;
+  }
+  const key = normalizeConnectionKey(connectionKeyPromptInput?.value ?? "");
+  if (!key) {
+    updateConnectionKeyPromptState();
+    connectionKeyPromptInput?.focus();
+    return false;
+  }
+  const duplicateKey = state.connections.some(
+    (connection) => connection.fromNodeId === pending.fromNodeId && normalizeConnectionKey(connection.key) === key
+  );
+  if (duplicateKey) {
+    alert(`這個連線名稱已存在：${key}`);
+    connectionKeyPromptInput?.focus();
+    connectionKeyPromptInput?.select();
+    return false;
+  }
+  const created = createConnection({
+    fromNodeId: pending.fromNodeId,
+    fromSide: pending.fromSide,
+    toNodeId: pending.toNodeId,
+    toSide: pending.toSide,
+    key,
+  });
+  if (created) {
+    updateConnectionKeyHistory(key);
+    commitHistory();
+    renderConnections();
+    hideConnectionKeyPrompt();
+    return true;
+  }
+  alert("連線建立失敗，請再試一次。");
+  return false;
+}
+
+function initializeConnectionKeyHistoryFromStorage() {
+  state.connectionKeyHistory = loadConnectionKeyHistoryFromStorage();
+  renderConnectionKeyPromptHistory();
+}
+
+function loadConnectionKeyHistoryFromStorage() {
+  try {
+    const raw = localStorage.getItem(CONNECTION_KEY_HISTORY_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean)
+      .slice(0, 15);
+  } catch (error) {
+    console.warn("load connection key history failed", error);
+    return [];
+  }
+}
+
+function saveConnectionKeyHistoryToStorage(history) {
+  try {
+    localStorage.setItem(CONNECTION_KEY_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 15)));
+  } catch (error) {
+    console.warn("save connection key history failed", error);
+  }
+}
+
+function updateConnectionKeyHistory(nextKey) {
+  const normalized = String(nextKey ?? "").trim();
+  if (!normalized) {
+    return;
+  }
+  const history = [normalized, ...state.connectionKeyHistory.filter((item) => item !== normalized)].slice(0, 15);
+  state.connectionKeyHistory = history;
+  saveConnectionKeyHistoryToStorage(history);
+  renderConnectionKeyPromptHistory();
+}
+
+function renderConnectionKeyPromptHistory() {
+  if (!connectionKeyPromptHistorySelect) {
+    return;
+  }
+  connectionKeyPromptHistorySelect.textContent = "";
+  if (state.connectionKeyHistory.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "尚無歷史紀錄";
+    option.disabled = true;
+    connectionKeyPromptHistorySelect.appendChild(option);
+    return;
+  }
+  state.connectionKeyHistory.forEach((entry) => {
+    const option = document.createElement("option");
+    option.value = entry;
+    option.textContent = entry;
+    connectionKeyPromptHistorySelect.appendChild(option);
+  });
 }
 
 function onNodeTextEditorPanelPointerDown(event) {
@@ -5761,6 +5979,7 @@ function buildSelectionJsonEditorPayload(nodeIds) {
     .filter((connection) => selectedSet.has(connection.fromNodeId) && selectedSet.has(connection.toNodeId))
     .map((connection) => ({
       id: connection.id,
+      key: normalizeConnectionKey(connection.key) || buildFallbackConnectionKey(connection.id),
       fromNodeId: connection.fromNodeId,
       fromSide: connection.fromSide,
       toNodeId: connection.toNodeId,
@@ -5862,7 +6081,16 @@ function parseSelectionJsonEditorPayload(payload, expectedNodeIds) {
       return { error: "connections 有重複連線。" };
     }
 
+    const nextKey = normalizeConnectionKey(rawConnection.key ?? rawConnection.label ?? rawConnection.name) || buildFallbackConnectionKey(connections.length + 1);
+    const duplicateKey = connections.some(
+      (connection) => connection.fromNodeId === fromNodeId && normalizeConnectionKey(connection.key) === nextKey
+    );
+    if (duplicateKey) {
+      return { error: `connections 的 key 重複：${nextKey}` };
+    }
+
     connections.push({
+      key: nextKey,
       fromNodeId,
       fromSide,
       toNodeId,
@@ -6186,6 +6414,19 @@ function onResize() {
 function onKeyDown(event) {
   if (handleShortcutCaptureKeyDown(event)) {
     return;
+  }
+
+  if (connectionKeyPromptPanelEl?.classList.contains("visible")) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      hideConnectionKeyPrompt();
+      return;
+    }
+    if (event.key === "Enter" && !isTypingTarget(event.target)) {
+      event.preventDefault();
+      confirmConnectionKeyPrompt();
+      return;
+    }
   }
 
   if (isTypingTarget(event.target)) {
@@ -6541,6 +6782,23 @@ function renderConnections() {
     path.dataset.connectionId = connection.id;
     path.setAttribute("d", buildPath(fromPoint, toPoint, connection.fromSide, connection.toSide));
     svg.appendChild(path);
+
+    const key = normalizeConnectionKey(connection.key);
+    if (key) {
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.classList.add("connection-label");
+      label.dataset.connectionId = connection.id;
+      const labelPoint = {
+        x: (fromPoint.x + toPoint.x) * 0.5,
+        y: (fromPoint.y + toPoint.y) * 0.5,
+      };
+      label.setAttribute("x", String(labelPoint.x));
+      label.setAttribute("y", String(labelPoint.y));
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("dominant-baseline", "central");
+      label.textContent = key;
+      svg.appendChild(label);
+    }
   });
 
   if (preview) {
@@ -7384,6 +7642,7 @@ function importClipboardPayload(payload, anchorWorld = null) {
       fromSide: connection.fromSide,
       toNodeId,
       toSide: connection.toSide,
+      key: connection.key,
     });
   });
 
@@ -7439,6 +7698,7 @@ function buildClipboardPayloadFromNodeIds(nodeIds) {
   const connections = state.connections
     .filter((connection) => idSet.has(connection.fromNodeId) && idSet.has(connection.toNodeId))
     .map((connection) => ({
+      key: normalizeConnectionKey(connection.key) || buildFallbackConnectionKey(connection.id),
       fromId: String(connection.fromNodeId),
       fromSide: connection.fromSide,
       toId: String(connection.toNodeId),
@@ -7646,6 +7906,7 @@ function parseClipboardPayloadText(text) {
       metadata: node.metadata ?? null,
     })),
     connections: normalized.connections.map((connection) => ({
+      key: normalizeConnectionKey(connection.key) || buildFallbackConnectionKey(`${connection.fromSourceId}_${connection.toSourceId}`),
       fromId: connection.fromSourceId,
       fromSide: connection.fromSide,
       toId: connection.toSourceId,
@@ -7743,7 +8004,13 @@ function normalizeClipboardPayload(payload) {
       ) {
         return null;
       }
-      return { fromSourceId, fromSide: normalizedFromSide, toSourceId, toSide: normalizedToSide };
+      return {
+        key: normalizeConnectionKey(rawConnection.key ?? rawConnection.label ?? rawConnection.name) || buildFallbackConnectionKey(`${fromSourceId}_${toSourceId}`),
+        fromSourceId,
+        fromSide: normalizedFromSide,
+        toSourceId,
+        toSide: normalizedToSide,
+      };
     })
     .filter(Boolean);
 
@@ -8188,6 +8455,7 @@ function normalizeProjectPayload(payload) {
     fallbackConnectionId += 1;
 
     connections.push({
+      key: normalizeConnectionKey(rawConnection.key ?? rawConnection.label ?? rawConnection.name) || buildFallbackConnectionKey(connectionId),
       id: connectionId,
       fromNodeId,
       fromSide,
@@ -9469,6 +9737,7 @@ function restoreSnapshot(snapshot) {
       }
       return {
         ...connection,
+        key: normalizeConnectionKey(connection.key) || buildFallbackConnectionKey(connection.id),
         fromSide,
         toSide,
       };
@@ -9559,7 +9828,10 @@ function buildNonPositionSnapshotHash(snapshot) {
       content: node.content,
       metadata: node.metadata ?? null,
     })),
-    connections: snapshot.connections.map((connection) => ({ ...connection })),
+    connections: snapshot.connections.map((connection) => ({
+      ...connection,
+      key: normalizeConnectionKey(connection.key) || buildFallbackConnectionKey(connection.id),
+    })),
   });
 }
 

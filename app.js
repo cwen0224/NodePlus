@@ -1,11 +1,10 @@
 const editor = document.getElementById("editor");
 const nodesLayer = document.getElementById("nodes-layer");
 const svg = document.getElementById("connections");
-const saveProjectBtn = document.getElementById("save-project-btn");
-const loadProjectBtn = document.getElementById("load-project-btn");
-const loadLegacyBtn = document.getElementById("load-legacy-btn");
-const setMediaPathBtn = document.getElementById("set-media-path-btn");
+const undoBtn = document.getElementById("undo-btn");
+const redoBtn = document.getElementById("redo-btn");
 const gitSyncBtn = document.getElementById("git-sync-btn");
+const setMediaPathBtn = document.getElementById("set-media-path-btn");
 const gitSyncStatusEl = document.getElementById("git-sync-status");
 const gitSyncPanelEl = document.getElementById("git-sync-panel");
 const gitSyncCloseBtn = document.getElementById("git-sync-close-btn");
@@ -223,10 +222,8 @@ async function bootstrap() {
   editor.addEventListener("dragover", onEditorDragOver);
   editor.addEventListener("dragleave", onEditorDragLeave);
   editor.addEventListener("drop", onEditorDrop);
-  saveProjectBtn.addEventListener("click", onSaveProjectClick);
-  loadProjectBtn.addEventListener("click", onLoadProjectClick);
-  loadLegacyBtn?.addEventListener("click", onLoadLegacyProjectClick);
-  setMediaPathBtn.addEventListener("click", onSetMediaPathClick);
+  undoBtn?.addEventListener("click", undoHistory);
+  redoBtn?.addEventListener("click", redoHistory);
   definedNodeMenuBtn?.addEventListener("click", onDefinedNodeMenuButtonClick);
   definedNodePanelEl?.addEventListener("click", onDefinedNodePanelClick);
   definedNodePanelEl?.addEventListener("pointerdown", (event) => event.stopPropagation());
@@ -7991,6 +7988,7 @@ function loadProjectStateFromDraftStorage() {
     state.history.lastHash = hashSnapshot(snapshot);
     state.projectLastSavedSnapshot = cloneSnapshot(snapshot);
     state.projectLastSavedHash = state.history.lastHash;
+    updateHistoryToolbarButtonsState();
     updateGitSyncStatusIndicator();
     return true;
   } catch (error) {
@@ -9394,6 +9392,18 @@ function initializeHistory() {
   state.history.lastHash = hashSnapshot(snapshot);
   state.projectLastSavedHash = state.history.lastHash;
   state.projectLastSavedSnapshot = cloneSnapshot(snapshot);
+  updateHistoryToolbarButtonsState();
+}
+
+function updateHistoryToolbarButtonsState() {
+  if (undoBtn) {
+    undoBtn.disabled = state.history.undo.length <= 1;
+    undoBtn.setAttribute("aria-disabled", String(undoBtn.disabled));
+  }
+  if (redoBtn) {
+    redoBtn.disabled = state.history.redo.length === 0;
+    redoBtn.setAttribute("aria-disabled", String(redoBtn.disabled));
+  }
 }
 
 function captureSnapshot() {
@@ -9490,6 +9500,7 @@ function commitHistory() {
   state.history.redo = [];
   state.history.lastHash = hash;
   persistProjectStateDraft(snapshot);
+  updateHistoryToolbarButtonsState();
   if (shouldAutoPersistSnapshotChange(previousSnapshot, snapshot)) {
     queueProjectAutosave(snapshot, hash);
   }
@@ -9506,6 +9517,7 @@ function undoHistory() {
   restoreSnapshot(previous);
   state.history.lastHash = hashSnapshot(previous);
   persistProjectStateDraft(previous);
+  updateHistoryToolbarButtonsState();
   if (shouldAutoPersistSnapshotChange(current, previous)) {
     queueProjectAutosave(previous, state.history.lastHash);
   }
@@ -9522,6 +9534,7 @@ function redoHistory() {
   restoreSnapshot(snapshot);
   state.history.lastHash = hashSnapshot(snapshot);
   persistProjectStateDraft(snapshot);
+  updateHistoryToolbarButtonsState();
   if (shouldAutoPersistSnapshotChange(previousSnapshot, snapshot)) {
     queueProjectAutosave(snapshot, state.history.lastHash);
   }

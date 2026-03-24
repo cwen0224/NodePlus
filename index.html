@@ -4,15 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>節點編輯器 MVP</title>
-  <link rel="stylesheet" href="./styles.css?v=20260324-3" />
+  <link rel="stylesheet" href="./styles.css?v=20260324-4" />
   </head>
   <body>
     <main class="app-shell">
       <header class="toolbar">
-        <button id="save-project-btn" type="button">存檔</button>
-        <button id="load-project-btn" type="button">讀檔</button>
-        <button id="load-legacy-btn" type="button">開啟舊檔</button>
-        <button id="set-media-path-btn" type="button">設置路徑</button>
+        <button id="undo-btn" type="button">上一步</button>
+        <button id="redo-btn" type="button">下一步</button>
         <button id="git-sync-btn" type="button">Git 同步</button>
         <span id="git-sync-status" class="git-sync-status" aria-live="polite">Git: off</span>
         <div id="defined-node-menu" class="defined-node-menu">
@@ -183,6 +181,6 @@
       </article>
     </template>
 
-  <script src="./app.js?v=20260324-3" defer></script>
+  <script src="./app.js?v=20260324-4" defer></script>
   </body>
 </html>

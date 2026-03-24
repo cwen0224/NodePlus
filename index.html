@@ -13,6 +13,8 @@
         <button id="load-project-btn" type="button">讀檔</button>
         <button id="load-legacy-btn" type="button">開啟舊檔</button>
         <button id="set-media-path-btn" type="button">設置路徑</button>
+        <button id="git-sync-btn" type="button">Git 同步</button>
+        <span id="git-sync-status" class="git-sync-status" aria-live="polite">Git: off</span>
         <div id="defined-node-menu" class="defined-node-menu">
           <button id="defined-node-menu-btn" type="button" aria-expanded="false" aria-controls="defined-node-panel">
             已定義節點
@@ -39,6 +41,49 @@
           <div id="shortcut-editor-list" class="shortcut-editor-list"></div>
           <footer class="shortcut-editor-footer">
             <button id="shortcut-reset-btn" type="button">重設預設</button>
+          </footer>
+        </div>
+      </section>
+      <section id="git-sync-panel" class="git-sync-panel" aria-hidden="true">
+        <div class="git-sync-card" role="dialog" aria-modal="true" aria-labelledby="git-sync-title">
+          <header class="git-sync-header">
+            <div>
+              <h2 id="git-sync-title">Git 同步設定</h2>
+              <p class="git-sync-hint">
+                需要具備 `Contents: write` 權限的 GitHub Token。Token 只會存放在這台瀏覽器。
+              </p>
+            </div>
+            <button id="git-sync-close-btn" class="git-sync-close-btn" type="button" aria-label="關閉 Git 同步設定">
+              ×
+            </button>
+          </header>
+          <div class="git-sync-fields">
+            <label for="git-sync-owner-input">Owner</label>
+            <input id="git-sync-owner-input" type="text" spellcheck="false" autocomplete="off" />
+            <label for="git-sync-repo-input">Repository</label>
+            <input id="git-sync-repo-input" type="text" spellcheck="false" autocomplete="off" />
+            <label for="git-sync-branch-input">Branch</label>
+            <input id="git-sync-branch-input" type="text" spellcheck="false" autocomplete="off" />
+            <label for="git-sync-path-input">File path</label>
+            <input id="git-sync-path-input" type="text" spellcheck="false" autocomplete="off" />
+            <label for="git-sync-token-input">GitHub Token</label>
+            <input id="git-sync-token-input" type="password" spellcheck="false" autocomplete="off" />
+            <label for="git-sync-autosync-checkbox" class="git-sync-checkbox-row">
+              <input id="git-sync-autosync-checkbox" type="checkbox" />
+              <span>自動同步</span>
+            </label>
+            <label for="git-sync-startup-checkbox" class="git-sync-checkbox-row">
+              <input id="git-sync-startup-checkbox" type="checkbox" />
+              <span>啟動時從 Git 載入</span>
+            </label>
+          </div>
+          <div id="git-sync-message" class="git-sync-message" aria-live="polite"></div>
+          <footer class="git-sync-footer">
+            <button id="git-sync-load-btn" type="button">從 Git 載入</button>
+            <button id="git-sync-now-btn" type="button">立即同步</button>
+            <button id="git-sync-save-btn" type="button">儲存設定</button>
+            <button id="git-sync-clear-btn" type="button">清除 Token</button>
+            <button id="git-sync-close-footer-btn" type="button">關閉</button>
           </footer>
         </div>
       </section>

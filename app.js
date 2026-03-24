@@ -5,6 +5,23 @@ const saveProjectBtn = document.getElementById("save-project-btn");
 const loadProjectBtn = document.getElementById("load-project-btn");
 const loadLegacyBtn = document.getElementById("load-legacy-btn");
 const setMediaPathBtn = document.getElementById("set-media-path-btn");
+const gitSyncBtn = document.getElementById("git-sync-btn");
+const gitSyncStatusEl = document.getElementById("git-sync-status");
+const gitSyncPanelEl = document.getElementById("git-sync-panel");
+const gitSyncCloseBtn = document.getElementById("git-sync-close-btn");
+const gitSyncCloseFooterBtn = document.getElementById("git-sync-close-footer-btn");
+const gitSyncOwnerInput = document.getElementById("git-sync-owner-input");
+const gitSyncRepoInput = document.getElementById("git-sync-repo-input");
+const gitSyncBranchInput = document.getElementById("git-sync-branch-input");
+const gitSyncPathInput = document.getElementById("git-sync-path-input");
+const gitSyncTokenInput = document.getElementById("git-sync-token-input");
+const gitSyncAutosyncInput = document.getElementById("git-sync-autosync-checkbox");
+const gitSyncStartupInput = document.getElementById("git-sync-startup-checkbox");
+const gitSyncMessageEl = document.getElementById("git-sync-message");
+const gitSyncLoadBtn = document.getElementById("git-sync-load-btn");
+const gitSyncNowBtn = document.getElementById("git-sync-now-btn");
+const gitSyncSaveBtn = document.getElementById("git-sync-save-btn");
+const gitSyncClearBtn = document.getElementById("git-sync-clear-btn");
 const definedNodeMenuEl = document.getElementById("defined-node-menu");
 const definedNodeMenuBtn = document.getElementById("defined-node-menu-btn");
 const definedNodePanelEl = document.getElementById("defined-node-panel");
@@ -70,6 +87,12 @@ const PROJECT_FILE_HANDLE_KEY = "project-state-file-handle";
 const PROJECT_STATE_SCHEMA = "node-editor.project";
 const PROJECT_STATE_VERSION = 1;
 const PROJECT_STATE_FILE = "project-state.json";
+const GIT_SYNC_STORAGE_KEY = "node-editor.git-sync.v1";
+const GIT_SYNC_DEBOUNCE_MS = 1800;
+const GIT_SYNC_DEFAULT_COMMIT_MESSAGE = "chore(editor): autosave project-state.json";
+const GITHUB_API_BASE = "https://api.github.com";
+const GITHUB_API_VERSION = "2026-03-10";
+const GITHUB_CONTENTS_ACCEPT = "application/vnd.github+json";
 const MEDIA_THUMBNAIL_TOKEN = "[embedded-thumbnail-data-url]";
 const THUMBNAIL_MAX_WIDTH = 560;
 const THUMBNAIL_MAX_HEIGHT = 360;
@@ -124,6 +147,18 @@ const state = {
   projectSaveInFlight: false,
   projectLastSavedHash: "",
   projectLastSavedSnapshot: null,
+  gitSync: {
+    settings: null,
+    queuedSnapshot: null,
+    queuedHash: "",
+    timerId: null,
+    inFlight: false,
+    lastRemoteSha: "",
+    lastSyncedHash: "",
+    lastSyncedAt: null,
+    lastMessage: "",
+    lastError: "",
+  },
   jsonEditorNodeId: null,
   jsonEditorOriginalThumbnailDataUrl: null,
   jsonEditorMode: null,
@@ -208,6 +243,19 @@ async function bootstrap() {
   nodeTextEditorSaveBtn.addEventListener("click", onNodeTextEditorSaveClick);
   nodeTextEditorContentTextarea.addEventListener("keydown", onNodeTextEditorKeyDown);
   nodeTextEditorTitleInput.addEventListener("keydown", onNodeTextEditorKeyDown);
+  gitSyncBtn?.addEventListener("click", () => toggleGitSyncPanel());
+  gitSyncCloseBtn?.addEventListener("click", hideGitSyncPanel);
+  gitSyncCloseFooterBtn?.addEventListener("click", hideGitSyncPanel);
+  gitSyncPanelEl?.addEventListener("pointerdown", onGitSyncPanelPointerDown);
+  [gitSyncOwnerInput, gitSyncRepoInput, gitSyncBranchInput, gitSyncPathInput, gitSyncTokenInput].forEach((input) =>
+    input?.addEventListener("input", onGitSyncSettingsInputChange)
+  );
+  gitSyncAutosyncInput?.addEventListener("change", onGitSyncSettingsInputChange);
+  gitSyncStartupInput?.addEventListener("change", onGitSyncSettingsInputChange);
+  gitSyncLoadBtn?.addEventListener("click", onGitSyncLoadClick);
+  gitSyncNowBtn?.addEventListener("click", onGitSyncNowClick);
+  gitSyncSaveBtn?.addEventListener("click", onGitSyncSaveClick);
+  gitSyncClearBtn?.addEventListener("click", onGitSyncClearTokenClick);
   mediaViewerPanelEl.addEventListener("pointerdown", onMediaViewerPanelPointerDown);
   mediaViewerCloseBtn.addEventListener("click", hideMediaViewer);
   helpFab.addEventListener("click", () => toggleShortcutPanel());
@@ -238,6 +286,7 @@ async function bootstrap() {
   });
 
   initializeShortcutBindings();
+  await initializeGitSyncFromStorage();
   initializeMediaPathFromStorage();
   renderDefinedNodeTypeList();
   updateEditorGridBackground();
@@ -3567,6 +3616,7 @@ function toggleShortcutPanel() {
 function showShortcutPanel() {
   hideContextMenu();
   hideDefinedNodePanel();
+  hideGitSyncPanel();
   hideMediaViewer();
   renderShortcutEditorList();
   shortcutPanelEl.classList.add("visible");
@@ -3577,6 +3627,42 @@ function hideShortcutPanel() {
   state.shortcutEditingActionId = null;
   shortcutPanelEl.classList.remove("visible");
   shortcutPanelEl.setAttribute("aria-hidden", "true");
+}
+
+function toggleGitSyncPanel() {
+  if (gitSyncPanelEl?.classList.contains("visible")) {
+    hideGitSyncPanel();
+    return;
+  }
+  showGitSyncPanel();
+}
+
+function showGitSyncPanel() {
+  hideContextMenu();
+  hideDefinedNodePanel();
+  hideShortcutPanel();
+  hideJsonEditor();
+  hideNodeTextEditor();
+  hideMediaViewer();
+  renderGitSyncPanel();
+  gitSyncPanelEl?.classList.add("visible");
+  gitSyncPanelEl?.setAttribute("aria-hidden", "false");
+  updateGitSyncStatusIndicator();
+}
+
+function hideGitSyncPanel() {
+  gitSyncPanelEl?.classList.remove("visible");
+  gitSyncPanelEl?.setAttribute("aria-hidden", "true");
+}
+
+function onGitSyncPanelPointerDown(event) {
+  const target = event.target;
+  const card = gitSyncPanelEl?.querySelector(".git-sync-card");
+  if (!card || !card.contains(target)) {
+    hideGitSyncPanel();
+    return;
+  }
+  event.stopPropagation();
 }
 
 function normalizeShortcutToken(rawToken) {
@@ -7783,6 +7869,10 @@ async function resolveProjectFileSourceForLoad(options = {}) {
 async function autoLoadLastProjectOnStartup() {
   try {
     await initializeProjectFileFromStorage();
+    const gitLoaded = await loadProjectStateFromGitOnStartup();
+    if (gitLoaded) {
+      return true;
+    }
     const source = await resolveProjectFileSourceForLoad({ allowPicker: false });
     if (!source?.file) {
       return false;
@@ -8304,6 +8394,12 @@ function applyLoadedProjectState(payload) {
   hideNodeTextEditor();
   hideMediaViewer();
   state.projectSaveQueued = null;
+  state.gitSync.queuedSnapshot = null;
+  state.gitSync.queuedHash = "";
+  if (state.gitSync.timerId != null) {
+    clearTimeout(state.gitSync.timerId);
+    state.gitSync.timerId = null;
+  }
 
   restoreSnapshot(payload.snapshot);
   if (payload.viewport) {
@@ -9309,6 +9405,7 @@ function commitHistory() {
   if (shouldAutoPersistSnapshotChange(previousSnapshot, snapshot)) {
     queueProjectAutosave(snapshot, hash);
   }
+  queueGitSync(snapshot, hash);
 }
 
 function undoHistory() {
@@ -9323,6 +9420,7 @@ function undoHistory() {
   if (shouldAutoPersistSnapshotChange(current, previous)) {
     queueProjectAutosave(previous, state.history.lastHash);
   }
+  queueGitSync(previous, state.history.lastHash);
 }
 
 function redoHistory() {
@@ -9337,6 +9435,7 @@ function redoHistory() {
   if (shouldAutoPersistSnapshotChange(previousSnapshot, snapshot)) {
     queueProjectAutosave(snapshot, state.history.lastHash);
   }
+  queueGitSync(snapshot, state.history.lastHash);
 }
 
 function shouldAutoPersistSnapshotChange(previousSnapshot, nextSnapshot) {
@@ -9399,16 +9498,42 @@ async function flushProjectAutosaveQueue() {
 async function saveProjectStateNow() {
   const snapshot = captureSnapshot();
   const hash = hashSnapshot(snapshot);
-  const result = await persistProjectState(snapshot, hash, {
+  const gitResult = await syncProjectStateToGit(snapshot, hash, { immediate: true, source: "manual-save" });
+  if (gitResult.reason === "already synced") {
+    const localResult = await persistProjectState(snapshot, hash, {
+      canRequestPermission: false,
+      allowPrompt: false,
+      lockNodePositions: false,
+    });
+    if (localResult.saved) {
+      state.projectLastSavedHash = hash;
+      state.projectLastSavedSnapshot = cloneSnapshot(localResult.persistedSnapshot);
+    }
+    return true;
+  }
+  if (gitResult.saved) {
+    const localResult = await persistProjectState(snapshot, hash, {
+      canRequestPermission: false,
+      allowPrompt: false,
+      lockNodePositions: false,
+    });
+    if (localResult.saved) {
+      state.projectLastSavedHash = hash;
+      state.projectLastSavedSnapshot = cloneSnapshot(localResult.persistedSnapshot);
+    }
+    return true;
+  }
+
+  const localResult = await persistProjectState(snapshot, hash, {
     canRequestPermission: true,
     allowPrompt: true,
     lockNodePositions: false,
   });
-  if (result.saved) {
+  if (localResult.saved) {
     state.projectLastSavedHash = hash;
-    state.projectLastSavedSnapshot = cloneSnapshot(result.persistedSnapshot);
+    state.projectLastSavedSnapshot = cloneSnapshot(localResult.persistedSnapshot);
   }
-  return result.saved;
+  return localResult.saved || gitResult.saved;
 }
 
 async function setProjectStateFileHandle(fileHandle) {
@@ -9614,4 +9739,760 @@ function updateEditorGridBackground() {
   editor.style.setProperty("--grid-size", `${spacing}px`);
   editor.style.setProperty("--grid-offset-x", `${offsetX}px`);
   editor.style.setProperty("--grid-offset-y", `${offsetY}px`);
+}
+
+function inferGitSyncDefaultsFromLocation() {
+  const defaults = {
+    owner: "",
+    repo: "",
+    branch: "main",
+    path: PROJECT_STATE_FILE,
+    token: "",
+    autosync: false,
+    loadOnStartup: false,
+    commitMessage: GIT_SYNC_DEFAULT_COMMIT_MESSAGE,
+  };
+
+  const hostname = String(window.location.hostname ?? "").toLowerCase();
+  if (!hostname.endsWith(".github.io")) {
+    return defaults;
+  }
+
+  const owner = hostname.split(".")[0]?.trim();
+  if (owner) {
+    defaults.owner = owner;
+  }
+
+  const pathSegments = String(window.location.pathname ?? "")
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (pathSegments.length > 0) {
+    try {
+      defaults.repo = decodeURIComponent(pathSegments[0]);
+    } catch {
+      defaults.repo = pathSegments[0];
+    }
+    if (defaults.repo) {
+      defaults.branch = "master";
+    }
+  }
+
+  return defaults;
+}
+
+function normalizeGitSyncPath(rawPath) {
+  const segments = String(rawPath ?? "")
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  return segments.length > 0 ? segments.join("/") : PROJECT_STATE_FILE;
+}
+
+function normalizeGitSyncSettings(rawSettings) {
+  const defaults = inferGitSyncDefaultsFromLocation();
+  const source = isPlainRecord(rawSettings) ? rawSettings : {};
+  const owner = String(source.owner ?? "").trim() || defaults.owner;
+  const repo = String(source.repo ?? "").trim() || defaults.repo;
+  const branch = String(source.branch ?? "").trim() || defaults.branch;
+  const path = normalizeGitSyncPath(source.path ?? defaults.path);
+
+  return {
+    owner,
+    repo,
+    branch,
+    path,
+    token: String(source.token ?? "").trim(),
+    autosync: Boolean(source.autosync),
+    loadOnStartup: Boolean(source.loadOnStartup),
+    commitMessage: String(source.commitMessage ?? "").trim() || defaults.commitMessage,
+  };
+}
+
+function loadGitSyncSettingsFromStorage() {
+  const defaults = normalizeGitSyncSettings({});
+  try {
+    const raw = localStorage.getItem(GIT_SYNC_STORAGE_KEY);
+    if (!raw) {
+      return defaults;
+    }
+    const parsed = JSON.parse(raw);
+    const source = isPlainRecord(parsed?.settings) ? parsed.settings : parsed;
+    return normalizeGitSyncSettings(source);
+  } catch (error) {
+    console.warn("load git sync settings failed", error);
+    return defaults;
+  }
+}
+
+function saveGitSyncSettingsToStorage(settings) {
+  try {
+    localStorage.setItem(
+      GIT_SYNC_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        settings: normalizeGitSyncSettings(settings),
+      })
+    );
+    return true;
+  } catch (error) {
+    console.warn("save git sync settings failed", error);
+    return false;
+  }
+}
+
+function getGitSyncSettings() {
+  if (!state.gitSync.settings) {
+    state.gitSync.settings = loadGitSyncSettingsFromStorage();
+  }
+  return state.gitSync.settings;
+}
+
+function isGitSyncTargetConfigured(settings = getGitSyncSettings()) {
+  return Boolean(settings?.owner && settings?.repo && settings?.path);
+}
+
+function isGitSyncWriteReady(settings = getGitSyncSettings()) {
+  return isGitSyncTargetConfigured(settings) && Boolean(settings?.token);
+}
+
+function buildGitSyncTargetLabel(settings = getGitSyncSettings()) {
+  if (!isGitSyncTargetConfigured(settings)) {
+    return "未設定";
+  }
+  return `${settings.owner}/${settings.repo}@${settings.branch}:${settings.path}`;
+}
+
+function renderGitSyncMessage(message, kind = "") {
+  if (!gitSyncMessageEl) {
+    return;
+  }
+  gitSyncMessageEl.textContent = String(message ?? "");
+  gitSyncMessageEl.className = "git-sync-message";
+  if (kind) {
+    gitSyncMessageEl.classList.add(kind);
+  }
+}
+
+function updateGitSyncStatusIndicator() {
+  if (!gitSyncStatusEl) {
+    return;
+  }
+
+  const settings = getGitSyncSettings();
+  let label = "Git: off";
+  let kind = "";
+
+  if (state.gitSync.inFlight) {
+    label = "Git: syncing";
+    kind = "syncing";
+  } else if (state.gitSync.lastError) {
+    label = "Git: error";
+    kind = "error";
+  } else if (isGitSyncWriteReady(settings)) {
+    label = settings.autosync ? "Git: autosync" : "Git: ready";
+    kind = "ready";
+  } else if (isGitSyncTargetConfigured(settings)) {
+    label = "Git: read-only";
+    kind = "ready";
+  }
+
+  gitSyncStatusEl.textContent = label;
+  gitSyncStatusEl.className = "git-sync-status";
+  if (kind) {
+    gitSyncStatusEl.classList.add(kind);
+  }
+  const statusSuffix = state.gitSync.lastError
+    ? state.gitSync.lastError
+    : state.gitSync.lastMessage || (!isGitSyncTargetConfigured(settings) ? "Git 同步未啟用" : "");
+  gitSyncStatusEl.title = [buildGitSyncTargetLabel(settings), statusSuffix].filter(Boolean).join(" | ");
+  gitSyncStatusEl.dataset.status = statusSuffix;
+}
+
+function updateGitSyncPanelState() {
+  const settings = getGitSyncSettings();
+  const hasTarget = isGitSyncTargetConfigured(settings);
+  const canWrite = isGitSyncWriteReady(settings);
+  const hasQueuedChange =
+    Boolean(state.gitSync.queuedSnapshot) && Boolean(state.gitSync.queuedHash) && state.gitSync.queuedHash !== state.gitSync.lastSyncedHash;
+
+  if (gitSyncLoadBtn) {
+    gitSyncLoadBtn.disabled = state.gitSync.inFlight || !hasTarget;
+  }
+  if (gitSyncNowBtn) {
+    gitSyncNowBtn.disabled = state.gitSync.inFlight || !canWrite;
+  }
+  if (gitSyncClearBtn) {
+    gitSyncClearBtn.disabled = state.gitSync.inFlight || !settings.token;
+  }
+  if (gitSyncAutosyncInput) {
+    gitSyncAutosyncInput.disabled = state.gitSync.inFlight || !hasTarget;
+  }
+  if (gitSyncStartupInput) {
+    gitSyncStartupInput.disabled = state.gitSync.inFlight || !hasTarget;
+  }
+
+  if (state.gitSync.lastError) {
+    renderGitSyncMessage(state.gitSync.lastError, "error");
+    updateGitSyncStatusIndicator();
+    return;
+  }
+
+  if (hasQueuedChange) {
+    renderGitSyncMessage(
+      settings.autosync && canWrite ? "變更已排程同步，稍候會自動寫入 Git。" : "目前有未同步的變更，請按「立即同步」。",
+      "warning"
+    );
+    updateGitSyncStatusIndicator();
+    return;
+  }
+
+  if (state.gitSync.lastMessage) {
+    renderGitSyncMessage(state.gitSync.lastMessage, state.gitSync.inFlight ? "warning" : "success");
+    updateGitSyncStatusIndicator();
+    return;
+  }
+
+  if (!hasTarget) {
+    renderGitSyncMessage("請先設定 Owner / Repository / File path。", "warning");
+  } else if (!settings.token) {
+    renderGitSyncMessage("可讀取遠端檔案，寫入 Git 需要 Token。", "warning");
+  } else if (settings.autosync) {
+    renderGitSyncMessage("已啟用自動同步，變更會延遲寫入 Git。", "success");
+  } else {
+    renderGitSyncMessage("設定已就緒，按「立即同步」可寫入 Git。", "warning");
+  }
+
+  updateGitSyncStatusIndicator();
+}
+
+function renderGitSyncPanel() {
+  const settings = getGitSyncSettings();
+  if (gitSyncOwnerInput) {
+    gitSyncOwnerInput.value = settings.owner;
+  }
+  if (gitSyncRepoInput) {
+    gitSyncRepoInput.value = settings.repo;
+  }
+  if (gitSyncBranchInput) {
+    gitSyncBranchInput.value = settings.branch;
+  }
+  if (gitSyncPathInput) {
+    gitSyncPathInput.value = settings.path;
+  }
+  if (gitSyncTokenInput) {
+    gitSyncTokenInput.value = settings.token;
+  }
+  if (gitSyncAutosyncInput) {
+    gitSyncAutosyncInput.checked = Boolean(settings.autosync);
+  }
+  if (gitSyncStartupInput) {
+    gitSyncStartupInput.checked = Boolean(settings.loadOnStartup);
+  }
+
+  updateGitSyncPanelState();
+}
+
+function readGitSyncSettingsFromInputs() {
+  return normalizeGitSyncSettings({
+    owner: gitSyncOwnerInput?.value ?? "",
+    repo: gitSyncRepoInput?.value ?? "",
+    branch: gitSyncBranchInput?.value ?? "",
+    path: gitSyncPathInput?.value ?? "",
+    token: gitSyncTokenInput?.value ?? "",
+    autosync: Boolean(gitSyncAutosyncInput?.checked),
+    loadOnStartup: Boolean(gitSyncStartupInput?.checked),
+    commitMessage: getGitSyncSettings().commitMessage,
+  });
+}
+
+function syncGitSyncSettingsFromInputs(options = {}) {
+  const nextSettings = readGitSyncSettingsFromInputs();
+  state.gitSync.settings = nextSettings;
+  if (options.persist !== false) {
+    saveGitSyncSettingsToStorage(nextSettings);
+  }
+  if (options.clearMessages !== false) {
+    state.gitSync.lastMessage = "";
+    state.gitSync.lastError = "";
+  }
+  updateGitSyncPanelState();
+
+  if (nextSettings.autosync && state.gitSync.queuedSnapshot && isGitSyncWriteReady(nextSettings) && !state.gitSync.inFlight) {
+    scheduleGitSyncFlush();
+  }
+
+  return nextSettings;
+}
+
+function onGitSyncSettingsInputChange() {
+  syncGitSyncSettingsFromInputs({ persist: true, clearMessages: true });
+}
+
+async function initializeGitSyncFromStorage() {
+  state.gitSync.settings = loadGitSyncSettingsFromStorage();
+  renderGitSyncPanel();
+  updateGitSyncStatusIndicator();
+  return state.gitSync.settings;
+}
+
+async function onGitSyncLoadClick() {
+  try {
+    syncGitSyncSettingsFromInputs({ persist: true, clearMessages: true });
+    if (!isGitSyncTargetConfigured()) {
+      state.gitSync.lastError = "請先設定 Owner / Repository / File path。";
+      state.gitSync.lastMessage = "";
+      updateGitSyncPanelState();
+      return;
+    }
+
+    const loaded = await loadProjectFromGit({ source: "manual-load" });
+    if (!loaded && !state.gitSync.lastError) {
+      state.gitSync.lastError = "從 Git 載入失敗。";
+      state.gitSync.lastMessage = "";
+      updateGitSyncPanelState();
+    }
+  } catch (error) {
+    console.error("manual git load failed", error);
+    state.gitSync.lastError = error?.message ? String(error.message) : "從 Git 載入失敗";
+    state.gitSync.lastMessage = "";
+    updateGitSyncPanelState();
+  }
+}
+
+async function onGitSyncNowClick() {
+  try {
+    syncGitSyncSettingsFromInputs({ persist: true, clearMessages: true });
+    if (!isGitSyncWriteReady()) {
+      state.gitSync.lastError = "寫入 Git 需要 Owner / Repository / File path 與 Token。";
+      state.gitSync.lastMessage = "";
+      updateGitSyncPanelState();
+      return;
+    }
+
+    const snapshot = captureSnapshot();
+    const hash = hashSnapshot(snapshot);
+    const result = await syncProjectStateToGit(snapshot, hash, { immediate: true, source: "manual-now" });
+    if (result.reason === "already synced") {
+      state.gitSync.lastMessage = "Git 已經是最新狀態。";
+      state.gitSync.lastError = "";
+      updateGitSyncPanelState();
+    }
+  } catch (error) {
+    console.error("manual git sync failed", error);
+    state.gitSync.lastError = error?.message ? String(error.message) : "Git 同步失敗";
+    state.gitSync.lastMessage = "";
+    updateGitSyncPanelState();
+  }
+}
+
+async function onGitSyncSaveClick() {
+  try {
+    const settings = syncGitSyncSettingsFromInputs({ persist: true, clearMessages: false });
+    if (!isGitSyncTargetConfigured(settings)) {
+      state.gitSync.lastError = "請先設定 Owner / Repository / File path。";
+      state.gitSync.lastMessage = "";
+      updateGitSyncPanelState();
+      return;
+    }
+
+    state.gitSync.lastMessage = "Git 同步設定已儲存。";
+    state.gitSync.lastError = "";
+    updateGitSyncPanelState();
+  } catch (error) {
+    console.error("save git sync settings failed", error);
+    state.gitSync.lastError = error?.message ? String(error.message) : "儲存 Git 同步設定失敗";
+    state.gitSync.lastMessage = "";
+    updateGitSyncPanelState();
+  }
+}
+
+async function onGitSyncClearTokenClick() {
+  try {
+    if (gitSyncTokenInput) {
+      gitSyncTokenInput.value = "";
+    }
+    syncGitSyncSettingsFromInputs({ persist: true, clearMessages: true });
+    state.gitSync.lastMessage = "GitHub Token 已清除。";
+    state.gitSync.lastError = "";
+    updateGitSyncPanelState();
+  } catch (error) {
+    console.error("clear git sync token failed", error);
+    state.gitSync.lastError = error?.message ? String(error.message) : "清除 Token 失敗";
+    state.gitSync.lastMessage = "";
+    updateGitSyncPanelState();
+  }
+}
+
+function queueGitSync(snapshot, hash) {
+  if (!snapshot || !hash) {
+    return;
+  }
+
+  const settings = getGitSyncSettings();
+  if (hash === state.gitSync.lastSyncedHash && !state.gitSync.inFlight) {
+    state.gitSync.queuedSnapshot = null;
+    state.gitSync.queuedHash = "";
+    if (state.gitSync.timerId != null) {
+      clearTimeout(state.gitSync.timerId);
+      state.gitSync.timerId = null;
+    }
+    updateGitSyncStatusIndicator();
+    return;
+  }
+
+  state.gitSync.queuedSnapshot = cloneSnapshot(snapshot);
+  state.gitSync.queuedHash = hash;
+  if (hash !== state.gitSync.lastSyncedHash) {
+    state.gitSync.lastMessage = "";
+  }
+  if (state.gitSync.timerId != null) {
+    clearTimeout(state.gitSync.timerId);
+    state.gitSync.timerId = null;
+  }
+  if (!settings.autosync || !isGitSyncWriteReady(settings)) {
+    updateGitSyncStatusIndicator();
+    return;
+  }
+  scheduleGitSyncFlush();
+}
+
+function scheduleGitSyncFlush() {
+  if (state.gitSync.timerId != null) {
+    clearTimeout(state.gitSync.timerId);
+  }
+  state.gitSync.timerId = window.setTimeout(() => {
+    state.gitSync.timerId = null;
+    void flushGitSyncQueue();
+  }, GIT_SYNC_DEBOUNCE_MS);
+  updateGitSyncStatusIndicator();
+}
+
+async function flushGitSyncQueue() {
+  if (state.gitSync.inFlight) {
+    return false;
+  }
+
+  const settings = getGitSyncSettings();
+  if (!settings.autosync || !isGitSyncWriteReady(settings) || !state.gitSync.queuedSnapshot || !state.gitSync.queuedHash) {
+    updateGitSyncStatusIndicator();
+    return false;
+  }
+
+  const snapshot = state.gitSync.queuedSnapshot;
+  const hash = state.gitSync.queuedHash;
+  state.gitSync.inFlight = true;
+  state.gitSync.lastMessage = "正在同步到 Git...";
+  state.gitSync.lastError = "";
+  updateGitSyncPanelState();
+
+  try {
+    const result = await performGitSync(snapshot, hash, settings, { source: "autosync" });
+    if (result.saved && state.gitSync.queuedHash === hash) {
+      state.gitSync.queuedSnapshot = null;
+      state.gitSync.queuedHash = "";
+    }
+    return result.saved;
+  } catch (error) {
+    console.error("git autosync failed", error);
+    state.gitSync.lastError = error?.message ? String(error.message) : "Git 自動同步失敗";
+    state.gitSync.lastMessage = "";
+    return false;
+  } finally {
+    state.gitSync.inFlight = false;
+    updateGitSyncPanelState();
+    if (
+      state.gitSync.queuedSnapshot &&
+      state.gitSync.queuedHash &&
+      state.gitSync.queuedHash !== hash &&
+      getGitSyncSettings().autosync &&
+      isGitSyncWriteReady(getGitSyncSettings())
+    ) {
+      scheduleGitSyncFlush();
+    }
+  }
+}
+
+async function syncProjectStateToGit(snapshot, hash, options = {}) {
+  const settings = getGitSyncSettings();
+  if (!snapshot || !hash || !isGitSyncWriteReady(settings)) {
+    return { saved: false, reason: "git sync not ready" };
+  }
+
+  if (!options.immediate) {
+    queueGitSync(snapshot, hash);
+    return { saved: false, queued: true };
+  }
+
+  if (state.gitSync.inFlight) {
+    await waitForGitSyncIdle();
+  }
+
+  return performGitSync(snapshot, hash, settings, options);
+}
+
+async function performGitSync(snapshot, hash, settings, options = {}) {
+  if (!snapshot || !hash) {
+    return { saved: false, reason: "missing snapshot" };
+  }
+
+  const resolvedSettings = normalizeGitSyncSettings(settings);
+  if (!isGitSyncWriteReady(resolvedSettings)) {
+    return { saved: false, reason: "git sync not ready" };
+  }
+  if (hash === state.gitSync.lastSyncedHash && state.gitSync.lastSyncedHash) {
+    state.gitSync.lastMessage = "Git 已經是最新狀態。";
+    state.gitSync.lastError = "";
+    updateGitSyncPanelState();
+    return { saved: false, reason: "already synced" };
+  }
+
+  state.gitSync.inFlight = true;
+  state.gitSync.lastError = "";
+  state.gitSync.lastMessage = options.source === "manual-save" ? "正在儲存到 Git..." : "正在同步到 Git...";
+  updateGitSyncPanelState();
+
+  try {
+    const snapshotToPersist = buildSnapshotForPersistence(snapshot, false);
+    const payload = buildProjectStatePayload(snapshotToPersist, hash);
+    const payloadText = JSON.stringify(payload, null, 2);
+    const fileRecord = await getGitHubFileRecord(resolvedSettings);
+    const nextRemoteSha = fileRecord?.sha ? String(fileRecord.sha) : "";
+    const writeResult = await putGitHubFileRecord(resolvedSettings, payloadText, nextRemoteSha);
+
+    if (!writeResult.saved) {
+      throw new Error(writeResult.errorMessage || "Git 寫入失敗");
+    }
+
+    state.gitSync.lastRemoteSha = writeResult.remoteSha || nextRemoteSha;
+    state.gitSync.lastSyncedHash = hash;
+    state.gitSync.lastSyncedAt = new Date().toISOString();
+    state.gitSync.lastMessage = `已同步到 Git：${resolvedSettings.owner}/${resolvedSettings.repo}/${resolvedSettings.path}`;
+    state.gitSync.lastError = "";
+    if (state.gitSync.queuedHash === hash) {
+      state.gitSync.queuedSnapshot = null;
+      state.gitSync.queuedHash = "";
+      if (state.gitSync.timerId != null) {
+        clearTimeout(state.gitSync.timerId);
+        state.gitSync.timerId = null;
+      }
+    }
+    updateGitSyncPanelState();
+    return {
+      saved: true,
+      remoteSha: state.gitSync.lastRemoteSha,
+      commitSha: writeResult.commitSha,
+    };
+  } catch (error) {
+    console.error("git sync failed", error);
+    state.gitSync.lastError = error?.message ? String(error.message) : "Git 同步失敗";
+    state.gitSync.lastMessage = "";
+    updateGitSyncPanelState();
+    return { saved: false, error };
+  } finally {
+    state.gitSync.inFlight = false;
+    updateGitSyncPanelState();
+  }
+}
+
+async function waitForGitSyncIdle() {
+  while (state.gitSync.inFlight) {
+    await new Promise((resolve) => window.setTimeout(resolve, 60));
+  }
+}
+
+async function getGitHubFileRecord(settings) {
+  const response = await fetchGitHubContents(settings, "GET");
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(await readGitHubErrorMessage(response));
+  }
+  return response.json();
+}
+
+async function putGitHubFileRecord(settings, payloadText, remoteSha = "") {
+  const body = {
+    message: settings.commitMessage || GIT_SYNC_DEFAULT_COMMIT_MESSAGE,
+    content: encodeUtf8Base64(payloadText),
+    branch: settings.branch,
+  };
+  if (remoteSha) {
+    body.sha = remoteSha;
+  }
+
+  let response = await fetchGitHubContents(settings, "PUT", body);
+  if (response.status === 409) {
+    const latest = await getGitHubFileRecord(settings);
+    const latestSha = latest?.sha ? String(latest.sha) : "";
+    if (!latestSha) {
+      response = await fetchGitHubContents(settings, "PUT", body);
+    } else {
+      body.sha = latestSha;
+      response = await fetchGitHubContents(settings, "PUT", body);
+    }
+  }
+
+  if (!response.ok) {
+    return {
+      saved: false,
+      errorMessage: await readGitHubErrorMessage(response),
+    };
+  }
+
+  const json = await response.json();
+  return {
+    saved: true,
+    remoteSha: String(json?.content?.sha ?? body.sha ?? remoteSha ?? ""),
+    commitSha: String(json?.commit?.sha ?? ""),
+  };
+}
+
+async function fetchGitHubContents(settings, method, body = null) {
+  const url = buildGitHubContentsUrl(settings, method === "GET" ? settings.branch : "");
+  const headers = {
+    Accept: GITHUB_CONTENTS_ACCEPT,
+    "X-GitHub-Api-Version": GITHUB_API_VERSION,
+  };
+  if (settings.token) {
+    headers.Authorization = `Bearer ${settings.token}`;
+  }
+  if (method !== "GET") {
+    headers["Content-Type"] = "application/json";
+  }
+
+  return fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+}
+
+function buildGitHubContentsUrl(settings, ref = "") {
+  const path = normalizeGitSyncPath(settings.path)
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  const baseUrl = `${GITHUB_API_BASE}/repos/${encodeURIComponent(settings.owner)}/${encodeURIComponent(settings.repo)}/contents/${path}`;
+  if (!ref) {
+    return baseUrl;
+  }
+  return `${baseUrl}?ref=${encodeURIComponent(ref)}`;
+}
+
+function encodeUtf8Base64(text) {
+  const bytes = new TextEncoder().encode(String(text ?? ""));
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function readGitHubErrorMessage(response) {
+  const rawText = await response.text();
+  if (!rawText) {
+    return response.statusText || `HTTP ${response.status}`;
+  }
+
+  try {
+    const parsed = JSON.parse(rawText);
+    const message = typeof parsed?.message === "string" ? parsed.message : "";
+    const details = Array.isArray(parsed?.errors)
+      ? parsed.errors
+          .map((item) => {
+            if (typeof item === "string") {
+              return item;
+            }
+            if (item && typeof item === "object") {
+              return String(item.message ?? item.code ?? item.resource ?? "");
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join("; ")
+      : "";
+    return [message, details].filter(Boolean).join(" - ") || response.statusText || `HTTP ${response.status}`;
+  } catch {
+    return rawText.trim() || response.statusText || `HTTP ${response.status}`;
+  }
+}
+
+async function loadProjectFromGit(options = {}) {
+  const settings = getGitSyncSettings();
+  if (!isGitSyncTargetConfigured(settings)) {
+    return false;
+  }
+
+  if (state.gitSync.inFlight) {
+    await waitForGitSyncIdle();
+  }
+
+  state.gitSync.inFlight = true;
+  state.gitSync.lastError = "";
+  state.gitSync.lastMessage = options.source === "startup" ? "正在從 Git 載入..." : "正在載入 Git 版本...";
+  updateGitSyncPanelState();
+
+  try {
+    const response = await fetchGitHubContents(settings, "GET");
+    if (response.status === 404) {
+      throw new Error("Git 上找不到指定的 project-state.json");
+    }
+    if (!response.ok) {
+      throw new Error(await readGitHubErrorMessage(response));
+    }
+
+    const json = await response.json();
+    const content = typeof json?.content === "string" ? json.content.trim() : "";
+    if (!content) {
+      throw new Error("遠端檔案沒有可讀取的內容");
+    }
+
+    const decoded = decodeBase64Utf8(content);
+    const parsed = JSON.parse(decoded);
+    const normalized = normalizeProjectPayload(parsed) || normalizeLegacyProjectPayload(parsed);
+    if (!normalized) {
+      throw new Error("遠端 JSON 格式無法載入");
+    }
+
+    applyLoadedProjectState(normalized);
+    const loadedHash = hashSnapshot(normalized.snapshot);
+    state.gitSync.lastRemoteSha = String(json?.sha ?? "");
+    state.gitSync.lastSyncedHash = loadedHash;
+    state.gitSync.lastSyncedAt = new Date().toISOString();
+    state.gitSync.lastMessage = `已從 Git 載入：${settings.owner}/${settings.repo}/${settings.path}`;
+    state.gitSync.lastError = "";
+    updateGitSyncPanelState();
+    return true;
+  } catch (error) {
+    console.error("load project from git failed", error);
+    state.gitSync.lastError = error?.message ? String(error.message) : "從 Git 載入失敗";
+    state.gitSync.lastMessage = "";
+    updateGitSyncPanelState();
+    return false;
+  } finally {
+    state.gitSync.inFlight = false;
+    updateGitSyncPanelState();
+  }
+}
+
+async function loadProjectStateFromGitOnStartup() {
+  const settings = getGitSyncSettings();
+  if (!settings.loadOnStartup || !isGitSyncTargetConfigured(settings)) {
+    return false;
+  }
+  return loadProjectFromGit({ source: "startup" });
+}
+
+function decodeBase64Utf8(base64Text) {
+  const cleaned = String(base64Text ?? "").replace(/\s+/g, "");
+  const binary = atob(cleaned);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new TextDecoder().decode(bytes);
 }

@@ -3,23 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>節點編輯器 MVP</title>
-  <link rel="stylesheet" href="./styles.css?v=20260324-4" />
+    <title>無限筆記</title>
+  <link rel="stylesheet" href="./styles.css?v=20260324-6" />
   </head>
   <body>
     <main class="app-shell">
       <header class="toolbar">
         <button id="undo-btn" type="button">上一步</button>
         <button id="redo-btn" type="button">下一步</button>
-        <button id="git-sync-btn" type="button">Git 同步</button>
-        <span id="git-sync-status" class="git-sync-status" aria-live="polite">Git: off</span>
+        <button id="git-sync-btn" type="button">同步備份</button>
+        <span id="git-sync-status" class="git-sync-status" aria-live="polite">備份: off</span>
         <div id="defined-node-menu" class="defined-node-menu">
           <button id="defined-node-menu-btn" type="button" aria-expanded="false" aria-controls="defined-node-panel">
-            已定義節點
+            筆記模板
           </button>
           <section id="defined-node-panel" class="defined-node-panel" aria-hidden="true">
             <header class="defined-node-panel-header">
-              <h2>類型列表</h2>
+              <h2>模板列表</h2>
               <span id="defined-node-count">0 類</span>
             </header>
             <div id="defined-node-list" class="defined-node-list"></div>
@@ -46,12 +46,12 @@
         <div class="git-sync-card" role="dialog" aria-modal="true" aria-labelledby="git-sync-title">
           <header class="git-sync-header">
             <div>
-              <h2 id="git-sync-title">Git 同步設定</h2>
-              <p class="git-sync-hint">
+            <h2 id="git-sync-title">同步備份設定</h2>
+            <p class="git-sync-hint">
                 需要具備 `Contents: write` 權限的 GitHub Token。Token 只會存放在這台瀏覽器。
               </p>
             </div>
-            <button id="git-sync-close-btn" class="git-sync-close-btn" type="button" aria-label="關閉 Git 同步設定">
+            <button id="git-sync-close-btn" class="git-sync-close-btn" type="button" aria-label="關閉同步備份設定">
               ×
             </button>
           </header>
@@ -68,17 +68,17 @@
             <input id="git-sync-token-input" type="password" spellcheck="false" autocomplete="off" />
             <label for="git-sync-autosync-checkbox" class="git-sync-checkbox-row">
               <input id="git-sync-autosync-checkbox" type="checkbox" />
-              <span>自動同步</span>
+              <span>自動備份</span>
             </label>
             <label for="git-sync-startup-checkbox" class="git-sync-checkbox-row">
               <input id="git-sync-startup-checkbox" type="checkbox" />
-              <span>啟動時從 Git 載入</span>
+              <span>啟動時從備份載入</span>
             </label>
           </div>
           <div id="git-sync-message" class="git-sync-message" aria-live="polite"></div>
           <footer class="git-sync-footer">
-            <button id="git-sync-load-btn" type="button">從 Git 載入</button>
-            <button id="git-sync-now-btn" type="button">立即同步</button>
+            <button id="git-sync-load-btn" type="button">從備份載入</button>
+            <button id="git-sync-now-btn" type="button">立即備份</button>
             <button id="git-sync-save-btn" type="button">儲存設定</button>
             <button id="git-sync-clear-btn" type="button">清除 Token</button>
             <button id="git-sync-close-footer-btn" type="button">關閉</button>
@@ -88,8 +88,8 @@
       <section id="json-editor-panel" class="json-editor-panel" aria-hidden="true">
         <div class="json-editor-card" role="dialog" aria-modal="true" aria-labelledby="json-editor-title">
           <header class="json-editor-header">
-            <h2 id="json-editor-title">媒體 JSON 編輯</h2>
-            <button id="json-editor-close-btn" class="json-editor-close-btn" type="button" aria-label="關閉 JSON 編輯">
+            <h2 id="json-editor-title">筆記資料編輯</h2>
+            <button id="json-editor-close-btn" class="json-editor-close-btn" type="button" aria-label="關閉筆記資料編輯">
               ×
             </button>
           </header>
@@ -104,12 +104,12 @@
       <section id="node-text-editor-panel" class="node-text-editor-panel" aria-hidden="true">
         <div class="node-text-editor-card" role="dialog" aria-modal="true" aria-labelledby="node-text-editor-title">
           <header class="node-text-editor-header">
-            <h2 id="node-text-editor-title">節點文字編輯</h2>
+            <h2 id="node-text-editor-title">筆記內容編輯</h2>
             <button
               id="node-text-editor-close-btn"
               class="node-text-editor-close-btn"
               type="button"
-              aria-label="關閉節點文字編輯"
+              aria-label="關閉筆記內容編輯"
             >
               ×
             </button>
@@ -122,8 +122,8 @@
           </div>
           <footer class="node-text-editor-footer">
             <div class="node-text-editor-footer-left">
-              <button id="node-text-editor-edit-json-btn" type="button">編輯JSON</button>
-              <button id="node-text-editor-define-json-btn" type="button">定義JSON</button>
+              <button id="node-text-editor-edit-json-btn" type="button">編輯筆記 JSON</button>
+              <button id="node-text-editor-define-json-btn" type="button">定義筆記 JSON</button>
             </div>
             <div class="node-text-editor-footer-right">
               <button id="node-text-editor-cancel-btn" type="button">取消</button>
@@ -147,7 +147,7 @@
         </div>
       </section>
 
-      <section id="editor" aria-label="Node Editor">
+      <section id="editor" aria-label="無限筆記白板">
         <svg id="connections" aria-hidden="true"></svg>
         <div id="nodes-layer"></div>
         <div id="lasso-box" aria-hidden="true"></div>
@@ -157,8 +157,8 @@
           <button type="button" data-action="cut" role="menuitem">剪下</button>
           <button type="button" data-action="paste" role="menuitem">貼上</button>
           <button type="button" data-action="duplicate" role="menuitem">複製一份</button>
-          <button type="button" data-action="edit-json" role="menuitem">編輯JSON</button>
-          <button type="button" data-action="define-node" role="menuitem">定義結點</button>
+          <button type="button" data-action="edit-json" role="menuitem">編輯筆記 JSON</button>
+          <button type="button" data-action="define-node" role="menuitem">定義模板</button>
           <button type="button" data-action="delete" role="menuitem">刪除</button>
           <button type="button" data-action="select-all" role="menuitem">全選</button>
           <button type="button" data-action="fit-view" role="menuitem">聚焦內容</button>
@@ -181,6 +181,6 @@
       </article>
     </template>
 
-  <script src="./app.js?v=20260324-4" defer></script>
+  <script src="./app.js?v=20260324-5" defer></script>
   </body>
 </html>

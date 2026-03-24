@@ -104,7 +104,7 @@ const BINDING_DIRECTIVE_LEGACY_PATTERN = /^n([trbl])(\d*)$/i;
 const BINDING_CHECK_DIRECTIVE_PATTERN = /^check(?:_(\d+)|(\d*))$/i;
 const BINDING_VALUE_DATE_FIELD_PATTERN = /^date_yyyy_mm_dd_(\d+)$/i;
 const BINDING_VALUE_TEXT_FIELD_PATTERN = /^text_(\d+)$/i;
-const DEFINED_NODE_TITLE = "已定義結點";
+const DEFINED_NODE_TITLE = "筆記模板";
 const GAMEPAD_REPEAT_INITIAL_MS = 260;
 const GAMEPAD_REPEAT_INTERVAL_MS = 92;
 const DEFAULT_TIMECODE_FPS = 30;
@@ -187,9 +187,9 @@ const SHORTCUT_ACTION_DEFS = [
   { id: "cut", label: "剪下", description: "剪下目前選取節點", defaultCombo: "Mod+KeyX" },
   { id: "paste", label: "貼上", description: "貼上剪貼簿節點", defaultCombo: "Mod+KeyV" },
   { id: "duplicate", label: "複製一份", description: "複製目前選取節點到新位置", defaultCombo: "Mod+KeyD" },
-  { id: "saveProject", label: "存檔", description: "存檔到 project-state.json", defaultCombo: "Mod+KeyS" },
-  { id: "loadProject", label: "讀檔", description: "讀取 project-state.json", defaultCombo: "Mod+KeyO" },
-  { id: "loadLegacyProject", label: "開啟舊檔", description: "讀取舊版 JSON 存檔", defaultCombo: "Mod+Shift+KeyO" },
+  { id: "saveProject", label: "儲存筆記", description: "儲存到 project-state.json", defaultCombo: "Mod+KeyS" },
+  { id: "loadProject", label: "讀取筆記", description: "讀取 project-state.json", defaultCombo: "Mod+KeyO" },
+  { id: "loadLegacyProject", label: "開啟舊筆記", description: "讀取舊版 JSON 存檔", defaultCombo: "Mod+Shift+KeyO" },
   { id: "undo", label: "復原", description: "回到上一個操作", defaultCombo: "Mod+KeyZ" },
   { id: "redo", label: "重做", description: "重新套用操作", defaultCombo: "Mod+Shift+KeyZ" },
   { id: "redoAlt", label: "重做（替代）", description: "重做替代鍵", defaultCombo: "Mod+KeyY" },
@@ -5290,7 +5290,7 @@ function showJsonEditor(nodeId) {
     openJsonEditorWithText("media", text, {
       nodeId,
       originalThumbnailDataUrl: thumbnailDataUrl,
-      title: "媒體 JSON 編輯",
+      title: "筆記資料編輯",
     });
     return;
   }
@@ -5300,7 +5300,7 @@ function showJsonEditor(nodeId) {
     if (!normalizedBinding) {
       openJsonEditorWithText("binding", "{}", {
         nodeId,
-        title: "綁定 JSON 編輯",
+        title: "筆記資料編輯",
       });
       return;
     }
@@ -5316,7 +5316,7 @@ function showJsonEditor(nodeId) {
       stringifyEditorJsonObject(extracted.cleanObject),
       {
         nodeId,
-        title: "綁定 JSON 編輯",
+        title: "筆記資料編輯",
         functionalConfig: sanitizeJsonEditorFunctionalConfig(functionalConfig) ?? extracted.functionalConfig,
       }
     );
@@ -5328,7 +5328,7 @@ function showJsonEditor(nodeId) {
     : parseJsonObjectTextSafely(node.content) ?? {};
   openJsonEditorWithText("node-json", stringifyEditorJsonObject(genericSource), {
     nodeId,
-    title: "節點 JSON 編輯",
+    title: "筆記資料編輯",
   });
 }
 
@@ -5351,7 +5351,7 @@ function showSelectionJsonEditor(nodeIds) {
   const payload = buildSelectionJsonEditorPayload(orderedIds);
   openJsonEditorWithText("selection", JSON.stringify(payload, null, 2), {
     selectionNodeIds: orderedIds,
-    title: "多節點 JSON 編輯",
+    title: "多筆記 JSON 編輯",
   });
 }
 
@@ -5364,7 +5364,7 @@ function openJsonEditorWithText(mode, text, options = {}) {
   state.jsonEditorOriginalThumbnailDataUrl = options.originalThumbnailDataUrl ?? null;
   state.jsonEditorFunctionalConfig = sanitizeJsonEditorFunctionalConfig(options.functionalConfig);
   if (jsonEditorTitleEl) {
-    jsonEditorTitleEl.textContent = options.title ?? "JSON 編輯";
+    jsonEditorTitleEl.textContent = options.title ?? "筆記資料編輯";
   }
   jsonEditorTextarea.value = text;
   renderJsonEditorFunctionalControls();
@@ -5385,7 +5385,7 @@ function hideJsonEditor() {
   jsonEditorTextarea.value = "";
   renderJsonEditorFunctionalControls();
   if (jsonEditorTitleEl) {
-    jsonEditorTitleEl.textContent = "媒體 JSON 編輯";
+    jsonEditorTitleEl.textContent = "筆記資料編輯";
   }
 }
 
@@ -8063,7 +8063,7 @@ async function pickProjectFileForLoad() {
       multiple: false,
       types: [
         {
-          description: "Node Editor Project",
+          description: "Note Editor Project",
           accept: {
             "application/json": [".json"],
           },
@@ -9698,7 +9698,7 @@ async function resolveProjectStateFileHandle(options = {}) {
       suggestedName: PROJECT_STATE_FILE,
       types: [
         {
-          description: "Node Editor Project",
+          description: "Note Editor Project",
           accept: {
             "application/json": [".json"],
           },
@@ -9983,20 +9983,20 @@ function updateGitSyncStatusIndicator() {
   }
 
   const settings = getGitSyncSettings();
-  let label = "Git: off";
+  let label = "備份: 關閉";
   let kind = "";
 
   if (state.gitSync.inFlight) {
-    label = "Git: syncing";
+    label = "備份: 同步中";
     kind = "syncing";
   } else if (state.gitSync.lastError) {
-    label = "Git: error";
+    label = "備份: 錯誤";
     kind = "error";
   } else if (isGitSyncWriteReady(settings)) {
-    label = settings.autosync ? "Git: autosync" : "Git: ready";
+    label = settings.autosync ? "備份: 自動" : "備份: 就緒";
     kind = "ready";
   } else if (isGitSyncTargetConfigured(settings)) {
-    label = "Git: read-only";
+    label = "備份: 唯讀";
     kind = "ready";
   }
 
@@ -10007,7 +10007,7 @@ function updateGitSyncStatusIndicator() {
   }
   const statusSuffix = state.gitSync.lastError
     ? state.gitSync.lastError
-    : state.gitSync.lastMessage || (!isGitSyncTargetConfigured(settings) ? "Git 同步未啟用" : "");
+    : state.gitSync.lastMessage || (!isGitSyncTargetConfigured(settings) ? "同步備份未啟用" : "");
   gitSyncStatusEl.title = [buildGitSyncTargetLabel(settings), statusSuffix].filter(Boolean).join(" | ");
   gitSyncStatusEl.dataset.status = statusSuffix;
 }
@@ -10043,7 +10043,7 @@ function updateGitSyncPanelState() {
 
   if (hasQueuedChange) {
     renderGitSyncMessage(
-      settings.autosync && canWrite ? "變更已排程同步，稍候會自動寫入 Git。" : "目前有未同步的變更，請按「立即同步」。",
+    settings.autosync && canWrite ? "變更已排程備份，稍候會自動寫入雲端。" : "目前有未同步的變更，請按「立即備份」。",
       "warning"
     );
     updateGitSyncStatusIndicator();
@@ -10061,9 +10061,9 @@ function updateGitSyncPanelState() {
   } else if (!settings.token) {
     renderGitSyncMessage("可讀取遠端檔案，寫入 Git 需要 Token。", "warning");
   } else if (settings.autosync) {
-    renderGitSyncMessage("已啟用自動同步，變更會延遲寫入 Git。", "success");
+    renderGitSyncMessage("已啟用自動備份，變更會延遲寫入雲端。", "success");
   } else {
-    renderGitSyncMessage("設定已就緒，按「立即同步」可寫入 Git。", "warning");
+    renderGitSyncMessage("設定已就緒，按「立即備份」可寫入雲端。", "warning");
   }
 
   updateGitSyncStatusIndicator();
@@ -10151,13 +10151,13 @@ async function onGitSyncLoadClick() {
 
     const loaded = await loadProjectFromGit({ source: "manual-load" });
     if (!loaded && !state.gitSync.lastError && !state.gitSync.lastMessage) {
-      state.gitSync.lastError = "從 Git 載入失敗。";
+      state.gitSync.lastError = "從備份載入失敗。";
       state.gitSync.lastMessage = "";
       updateGitSyncPanelState();
     }
   } catch (error) {
     console.error("manual git load failed", error);
-    state.gitSync.lastError = error?.message ? String(error.message) : "從 Git 載入失敗";
+    state.gitSync.lastError = error?.message ? String(error.message) : "從備份載入失敗";
     state.gitSync.lastMessage = "";
     updateGitSyncPanelState();
   }
@@ -10177,13 +10177,13 @@ async function onGitSyncNowClick() {
     const hash = hashSnapshot(snapshot);
     const result = await syncProjectStateToGit(snapshot, hash, { immediate: true, source: "manual-now" });
     if (result.reason === "already synced") {
-      state.gitSync.lastMessage = "Git 已經是最新狀態。";
+      state.gitSync.lastMessage = "備份已經是最新狀態。";
       state.gitSync.lastError = "";
       updateGitSyncPanelState();
     }
   } catch (error) {
     console.error("manual git sync failed", error);
-    state.gitSync.lastError = error?.message ? String(error.message) : "Git 同步失敗";
+    state.gitSync.lastError = error?.message ? String(error.message) : "備份同步失敗";
     state.gitSync.lastMessage = "";
     updateGitSyncPanelState();
   }
@@ -10199,12 +10199,12 @@ async function onGitSyncSaveClick() {
       return;
     }
 
-    state.gitSync.lastMessage = "Git 同步設定已儲存。";
+    state.gitSync.lastMessage = "備份設定已儲存。";
     state.gitSync.lastError = "";
     updateGitSyncPanelState();
   } catch (error) {
     console.error("save git sync settings failed", error);
-    state.gitSync.lastError = error?.message ? String(error.message) : "儲存 Git 同步設定失敗";
+    state.gitSync.lastError = error?.message ? String(error.message) : "儲存同步備份設定失敗";
     state.gitSync.lastMessage = "";
     updateGitSyncPanelState();
   }
@@ -10285,7 +10285,7 @@ async function flushGitSyncQueue() {
   const snapshot = state.gitSync.queuedSnapshot;
   const hash = state.gitSync.queuedHash;
   state.gitSync.inFlight = true;
-  state.gitSync.lastMessage = "正在同步到 Git...";
+    state.gitSync.lastMessage = "正在同步備份...";
   state.gitSync.lastError = "";
   updateGitSyncPanelState();
 
@@ -10298,7 +10298,7 @@ async function flushGitSyncQueue() {
     return result.saved;
   } catch (error) {
     console.error("git autosync failed", error);
-    state.gitSync.lastError = error?.message ? String(error.message) : "Git 自動同步失敗";
+    state.gitSync.lastError = error?.message ? String(error.message) : "自動備份失敗";
     state.gitSync.lastMessage = "";
     return false;
   } finally {
@@ -10344,7 +10344,7 @@ async function performGitSync(snapshot, hash, settings, options = {}) {
     return { saved: false, reason: "git sync not ready" };
   }
   if (hash === state.gitSync.lastSyncedHash && state.gitSync.lastSyncedHash) {
-    state.gitSync.lastMessage = "Git 已經是最新狀態。";
+      state.gitSync.lastMessage = "備份已經是最新狀態。";
     state.gitSync.lastError = "";
     updateGitSyncPanelState();
     return { saved: false, reason: "already synced" };
@@ -10352,7 +10352,7 @@ async function performGitSync(snapshot, hash, settings, options = {}) {
 
   state.gitSync.inFlight = true;
   state.gitSync.lastError = "";
-  state.gitSync.lastMessage = options.source === "manual-save" ? "正在儲存到 Git..." : "正在同步到 Git...";
+    state.gitSync.lastMessage = options.source === "manual-save" ? "正在儲存到備份..." : "正在同步備份...";
   updateGitSyncPanelState();
 
   try {
@@ -10370,7 +10370,7 @@ async function performGitSync(snapshot, hash, settings, options = {}) {
     state.gitSync.lastRemoteSha = writeResult.remoteSha || nextRemoteSha;
     state.gitSync.lastSyncedHash = hash;
     state.gitSync.lastSyncedAt = new Date().toISOString();
-    state.gitSync.lastMessage = `已同步到 Git：${resolvedSettings.owner}/${resolvedSettings.repo}/${resolvedSettings.path}`;
+    state.gitSync.lastMessage = `已同步備份：${resolvedSettings.owner}/${resolvedSettings.repo}/${resolvedSettings.path}`;
     state.gitSync.lastError = "";
     if (state.gitSync.queuedHash === hash) {
       state.gitSync.queuedSnapshot = null;
@@ -10388,7 +10388,7 @@ async function performGitSync(snapshot, hash, settings, options = {}) {
     };
   } catch (error) {
     console.error("git sync failed", error);
-    state.gitSync.lastError = error?.message ? String(error.message) : "Git 同步失敗";
+    state.gitSync.lastError = error?.message ? String(error.message) : "備份同步失敗";
     state.gitSync.lastMessage = "";
     updateGitSyncPanelState();
     return { saved: false, error };
@@ -10536,13 +10536,13 @@ async function loadProjectFromGit(options = {}) {
 
   state.gitSync.inFlight = true;
   state.gitSync.lastError = "";
-  state.gitSync.lastMessage = options.source === "startup" ? "正在從 Git 載入..." : "正在載入 Git 版本...";
+    state.gitSync.lastMessage = options.source === "startup" ? "正在從備份載入..." : "正在載入備份版本...";
   updateGitSyncPanelState();
 
   try {
     const response = await fetchGitHubContents(settings, "GET");
     if (response.status === 404) {
-      const missingMessage = "Git 上尚未建立 project-state.json，請先按「立即同步」建立遠端檔案。";
+    const missingMessage = "備份空間尚未建立 project-state.json，請先按「立即備份」建立遠端檔案。";
       if (options.source === "startup") {
         state.gitSync.lastMessage = "";
         state.gitSync.lastError = "";
@@ -10575,13 +10575,13 @@ async function loadProjectFromGit(options = {}) {
     state.gitSync.lastRemoteSha = String(json?.sha ?? "");
     state.gitSync.lastSyncedHash = loadedHash;
     state.gitSync.lastSyncedAt = new Date().toISOString();
-    state.gitSync.lastMessage = `已從 Git 載入：${settings.owner}/${settings.repo}/${settings.path}`;
+    state.gitSync.lastMessage = `已從備份載入：${settings.owner}/${settings.repo}/${settings.path}`;
     state.gitSync.lastError = "";
     updateGitSyncPanelState();
     return true;
   } catch (error) {
     console.error("load project from git failed", error);
-    state.gitSync.lastError = error?.message ? String(error.message) : "從 Git 載入失敗";
+    state.gitSync.lastError = error?.message ? String(error.message) : "從備份載入失敗";
     state.gitSync.lastMessage = "";
     updateGitSyncPanelState();
     return false;

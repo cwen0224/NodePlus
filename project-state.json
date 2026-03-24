@@ -1,0 +1,68 @@
+{
+  "type": "node-editor.project",
+  "version": 1,
+  "savedAt": "2026-03-24T00:00:00.000Z",
+  "hash": "seed-default-project-state",
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "nextNodeId": 4,
+  "nextConnectionId": 1,
+  "nodeDefinitions": [],
+  "nodes": [
+    {
+      "id": "1",
+      "x": 80,
+      "y": 80,
+      "title": "節點 1",
+      "content": "JSON 綁定節點",
+      "metadata": {
+        "node_Right_1": null,
+        "node_Top_1": null,
+        "node_Left_1": null,
+        "node_Bottom_1": null,
+        "check_1": null,
+        "check_2": null
+      }
+    },
+    {
+      "id": "2",
+      "x": 360,
+      "y": 220,
+      "title": "節點 2",
+      "content": "JSON 綁定節點",
+      "metadata": {
+        "node_Right_1": null,
+        "node_Top_1": null,
+        "node_Left_1": null,
+        "node_Bottom_1": null,
+        "check_1": null,
+        "check_2": null
+      }
+    },
+    {
+      "id": "3",
+      "x": 610,
+      "y": 110,
+      "title": "節點 3",
+      "content": "JSON 綁定節點",
+      "metadata": {
+        "node_Right_1": null,
+        "node_Top_1": null,
+        "node_Left_1": null,
+        "node_Bottom_1": null,
+        "check_1": null,
+        "check_2": null
+      }
+    }
+  ],
+  "connections": [],
+  "selectedNodeIds": [],
+  "media": {
+    "folder": "media",
+    "manifestFile": "media-manifest.json",
+    "manifestItems": []
+  }
+}

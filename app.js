@@ -10047,7 +10047,7 @@ async function onGitSyncLoadClick() {
     }
 
     const loaded = await loadProjectFromGit({ source: "manual-load" });
-    if (!loaded && !state.gitSync.lastError) {
+    if (!loaded && !state.gitSync.lastError && !state.gitSync.lastMessage) {
       state.gitSync.lastError = "從 Git 載入失敗。";
       state.gitSync.lastMessage = "";
       updateGitSyncPanelState();
@@ -10439,7 +10439,16 @@ async function loadProjectFromGit(options = {}) {
   try {
     const response = await fetchGitHubContents(settings, "GET");
     if (response.status === 404) {
-      throw new Error("Git 上找不到指定的 project-state.json");
+      const missingMessage = "Git 上尚未建立 project-state.json，請先按「立即同步」建立遠端檔案。";
+      if (options.source === "startup") {
+        state.gitSync.lastMessage = "";
+        state.gitSync.lastError = "";
+        return false;
+      }
+      state.gitSync.lastMessage = missingMessage;
+      state.gitSync.lastError = "";
+      updateGitSyncPanelState();
+      return false;
     }
     if (!response.ok) {
       throw new Error(await readGitHubErrorMessage(response));

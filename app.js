@@ -87,6 +87,7 @@ const PROJECT_FILE_HANDLE_KEY = "project-state-file-handle";
 const PROJECT_STATE_SCHEMA = "node-editor.project";
 const PROJECT_STATE_VERSION = 1;
 const PROJECT_STATE_FILE = "project-state.json";
+const PROJECT_DRAFT_STORAGE_KEY = "node-editor.project-draft.v1";
 const GIT_SYNC_STORAGE_KEY = "node-editor.git-sync.v1";
 const GIT_SYNC_DEBOUNCE_MS = 1800;
 const GIT_SYNC_DEFAULT_COMMIT_MESSAGE = "chore(editor): autosave project-state.json";
@@ -241,6 +242,8 @@ async function bootstrap() {
   nodeTextEditorEditJsonBtn?.addEventListener("click", onNodeTextEditorEditJsonClick);
   nodeTextEditorDefineJsonBtn?.addEventListener("click", onNodeTextEditorDefineJsonClick);
   nodeTextEditorSaveBtn.addEventListener("click", onNodeTextEditorSaveClick);
+  nodeTextEditorTitleInput.addEventListener("input", onNodeTextEditorInput);
+  nodeTextEditorContentTextarea.addEventListener("input", onNodeTextEditorInput);
   nodeTextEditorContentTextarea.addEventListener("keydown", onNodeTextEditorKeyDown);
   nodeTextEditorTitleInput.addEventListener("keydown", onNodeTextEditorKeyDown);
   gitSyncBtn?.addEventListener("click", () => toggleGitSyncPanel());
@@ -4200,6 +4203,43 @@ function showNodeTextEditor(nodeId) {
   nodeTextEditorTitleInput.select();
 }
 
+function onNodeTextEditorInput() {
+  const nodeId = state.nodeTextEditorNodeId;
+  if (!nodeId) {
+    return;
+  }
+  const node = state.nodes.get(nodeId);
+  if (!node) {
+    return;
+  }
+
+  const previousTitle = node.title;
+  const previousContent = node.content;
+  const nextTitle = normalizeNodeTitle(nodeTextEditorTitleInput.value, node.id);
+  const nextContent = isMediaMetadata(node.metadata)
+    ? buildMediaNodeContent(node.metadata)
+    : isBindingMetadata(node.metadata)
+      ? buildBindingNodeContent(node.metadata)
+      : normalizeNodeContent(nodeTextEditorContentTextarea.value);
+
+  if (nextTitle === previousTitle && nextContent === previousContent) {
+    return;
+  }
+
+  node.title = nextTitle;
+  node.content = nextContent;
+  const titleEl = node.el.querySelector(".node-title");
+  const contentEl = node.el.querySelector(".node-content");
+  if (titleEl) {
+    titleEl.textContent = nextTitle;
+  }
+  if (contentEl) {
+    contentEl.textContent = nextContent;
+  }
+
+  commitHistory();
+}
+
 function hideNodeTextEditor() {
   state.nodeTextEditorNodeId = null;
   nodeTextEditorPanelEl.classList.remove("visible");
@@ -7869,6 +7909,10 @@ async function resolveProjectFileSourceForLoad(options = {}) {
 async function autoLoadLastProjectOnStartup() {
   try {
     await initializeProjectFileFromStorage();
+    const draftLoaded = loadProjectStateFromDraftStorage();
+    if (draftLoaded) {
+      return true;
+    }
     const gitLoaded = await loadProjectStateFromGitOnStartup();
     if (gitLoaded) {
       return true;
@@ -7927,6 +7971,48 @@ async function loadProjectStateFromProjectRoot(rootHandle, options = {}) {
       throw error;
     }
     return { found: true, loaded: false, error };
+  }
+}
+
+function loadProjectStateFromDraftStorage() {
+  try {
+    const raw = localStorage.getItem(PROJECT_DRAFT_STORAGE_KEY);
+    if (!raw) {
+      return false;
+    }
+    const parsed = JSON.parse(raw);
+    const snapshot = isPlainRecord(parsed?.snapshot) ? parsed.snapshot : null;
+    if (!snapshot || !Array.isArray(snapshot.nodes) || !Array.isArray(snapshot.connections)) {
+      return false;
+    }
+    restoreSnapshot(snapshot);
+    state.history.undo = [snapshot];
+    state.history.redo = [];
+    state.history.lastHash = hashSnapshot(snapshot);
+    state.projectLastSavedSnapshot = cloneSnapshot(snapshot);
+    state.projectLastSavedHash = state.history.lastHash;
+    updateGitSyncStatusIndicator();
+    return true;
+  } catch (error) {
+    console.warn("load project draft failed", error);
+    return false;
+  }
+}
+
+function persistProjectStateDraft(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  try {
+    localStorage.setItem(
+      PROJECT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        savedAt: new Date().toISOString(),
+        snapshot,
+      })
+    );
+  } catch (error) {
+    console.warn("persist project draft failed", error);
   }
 }
 
@@ -8402,6 +8488,7 @@ function applyLoadedProjectState(payload) {
   }
 
   restoreSnapshot(payload.snapshot);
+  persistProjectStateDraft(payload.snapshot);
   if (payload.viewport) {
     applyViewportState(payload.viewport);
   }
@@ -9402,6 +9489,7 @@ function commitHistory() {
   }
   state.history.redo = [];
   state.history.lastHash = hash;
+  persistProjectStateDraft(snapshot);
   if (shouldAutoPersistSnapshotChange(previousSnapshot, snapshot)) {
     queueProjectAutosave(snapshot, hash);
   }
@@ -9417,6 +9505,7 @@ function undoHistory() {
   const previous = state.history.undo[state.history.undo.length - 1];
   restoreSnapshot(previous);
   state.history.lastHash = hashSnapshot(previous);
+  persistProjectStateDraft(previous);
   if (shouldAutoPersistSnapshotChange(current, previous)) {
     queueProjectAutosave(previous, state.history.lastHash);
   }
@@ -9432,6 +9521,7 @@ function redoHistory() {
   state.history.undo.push(snapshot);
   restoreSnapshot(snapshot);
   state.history.lastHash = hashSnapshot(snapshot);
+  persistProjectStateDraft(snapshot);
   if (shouldAutoPersistSnapshotChange(previousSnapshot, snapshot)) {
     queueProjectAutosave(snapshot, state.history.lastHash);
   }
@@ -10150,7 +10240,7 @@ function queueGitSync(snapshot, hash) {
     clearTimeout(state.gitSync.timerId);
     state.gitSync.timerId = null;
   }
-  if (!settings.autosync || !isGitSyncWriteReady(settings)) {
+  if (!isGitSyncWriteReady(settings)) {
     updateGitSyncStatusIndicator();
     return;
   }
@@ -10174,7 +10264,7 @@ async function flushGitSyncQueue() {
   }
 
   const settings = getGitSyncSettings();
-  if (!settings.autosync || !isGitSyncWriteReady(settings) || !state.gitSync.queuedSnapshot || !state.gitSync.queuedHash) {
+  if (!isGitSyncWriteReady(settings) || !state.gitSync.queuedSnapshot || !state.gitSync.queuedHash) {
     updateGitSyncStatusIndicator();
     return false;
   }

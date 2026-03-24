@@ -130,6 +130,7 @@ body {
   padding: 12px;
   background: rgba(248, 250, 252, 0.94);
   backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
 .node-text-editor-panel.visible {
@@ -400,6 +401,7 @@ body {
   grid-template-rows: auto auto 1fr auto;
   gap: 12px;
   padding: 18px 20px 20px;
+  pointer-events: auto;
 }
 
 .node-text-editor-header {
@@ -515,6 +517,7 @@ body {
   padding: 18px;
   background: rgba(248, 250, 252, 0.92);
   backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
 .connection-key-prompt-panel.visible {
@@ -530,6 +533,7 @@ body {
   display: grid;
   gap: 12px;
   padding: 18px;
+  pointer-events: auto;
 }
 
 .connection-key-prompt-header {

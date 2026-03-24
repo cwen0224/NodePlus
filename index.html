@@ -120,11 +120,14 @@
             <label for="node-text-editor-content-textarea">內容</label>
             <textarea id="node-text-editor-content-textarea" spellcheck="false"></textarea>
           </div>
+          <section class="node-text-editor-params" aria-labelledby="node-text-editor-params-title">
+            <header class="node-text-editor-params-header">
+              <h3 id="node-text-editor-params-title">參數</h3>
+              <button id="node-text-editor-add-param-btn" type="button" aria-label="新增參數">＋</button>
+            </header>
+            <div id="node-text-editor-param-list" class="node-text-editor-param-list"></div>
+          </section>
           <footer class="node-text-editor-footer">
-            <div class="node-text-editor-footer-left">
-              <button id="node-text-editor-edit-json-btn" type="button">編輯筆記 JSON</button>
-              <button id="node-text-editor-define-json-btn" type="button">定義筆記 JSON</button>
-            </div>
             <div class="node-text-editor-footer-right">
               <button id="node-text-editor-cancel-btn" type="button">取消</button>
               <button id="node-text-editor-save-btn" type="button">儲存</button>

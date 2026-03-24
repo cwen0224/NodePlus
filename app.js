@@ -47,6 +47,8 @@ const nodeTextEditorTitleInput = document.getElementById("node-text-editor-title
 const nodeTextEditorContentTextarea = document.getElementById("node-text-editor-content-textarea");
 const nodeTextEditorEditJsonBtn = document.getElementById("node-text-editor-edit-json-btn");
 const nodeTextEditorDefineJsonBtn = document.getElementById("node-text-editor-define-json-btn");
+const nodeTextEditorAddParamBtn = document.getElementById("node-text-editor-add-param-btn");
+const nodeTextEditorParamListEl = document.getElementById("node-text-editor-param-list");
 const nodeTextEditorCancelBtn = document.getElementById("node-text-editor-cancel-btn");
 const nodeTextEditorSaveBtn = document.getElementById("node-text-editor-save-btn");
 const connectionKeyPromptPanelEl = document.getElementById("connection-key-prompt-panel");
@@ -247,6 +249,9 @@ async function bootstrap() {
   nodeTextEditorCancelBtn.addEventListener("click", hideNodeTextEditor);
   nodeTextEditorEditJsonBtn?.addEventListener("click", onNodeTextEditorEditJsonClick);
   nodeTextEditorDefineJsonBtn?.addEventListener("click", onNodeTextEditorDefineJsonClick);
+  nodeTextEditorAddParamBtn?.addEventListener("click", onNodeTextEditorAddParamClick);
+  nodeTextEditorParamListEl?.addEventListener("click", onNodeTextEditorParamListClick);
+  nodeTextEditorParamListEl?.addEventListener("input", onNodeTextEditorParamListInput);
   nodeTextEditorSaveBtn.addEventListener("click", onNodeTextEditorSaveClick);
   nodeTextEditorTitleInput.addEventListener("input", onNodeTextEditorInput);
   nodeTextEditorContentTextarea.addEventListener("input", onNodeTextEditorInput);
@@ -4228,6 +4233,7 @@ function showNodeTextEditor(nodeId) {
     : bindingNode
       ? "綁定節點內容由 JSON 綁定規則與連線自動產生"
       : "";
+  renderNodeTextEditorParams(node);
   nodeTextEditorPanelEl.classList.add("visible");
   nodeTextEditorPanelEl.setAttribute("aria-hidden", "false");
   if (nodeTextEditorContentTextarea.readOnly) {
@@ -4276,6 +4282,189 @@ function onNodeTextEditorInput() {
   commitHistory();
 }
 
+function getNodeTextEditorParams(node) {
+  if (!node || !isPlainRecord(node.metadata)) {
+    return [];
+  }
+  const rawParams = node.metadata.params;
+  if (Array.isArray(rawParams)) {
+    return rawParams
+      .map((entry) => ({
+        key: String(entry?.key ?? "").trim(),
+        value: String(entry?.value ?? ""),
+      }))
+      .filter((entry) => entry.key !== "" || entry.value !== "");
+  }
+  if (!isPlainRecord(rawParams)) {
+    return [];
+  }
+  return Object.entries(rawParams)
+    .map(([key, value]) => ({
+      key: String(key ?? "").trim(),
+      value: value == null ? "" : String(value),
+    }))
+    .filter((entry) => entry.key !== "" || entry.value !== "");
+}
+
+function renderNodeTextEditorParams(node) {
+  if (!nodeTextEditorParamListEl) {
+    return;
+  }
+  nodeTextEditorParamListEl.textContent = "";
+  const params = getNodeTextEditorParams(node);
+  if (params.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "node-text-editor-param-empty";
+    empty.textContent = "按上方＋新增參數列。";
+    nodeTextEditorParamListEl.appendChild(empty);
+    return;
+  }
+  params.forEach((param) => {
+    appendNodeTextEditorParamRow(param.key, param.value);
+  });
+}
+
+function createNodeTextEditorParamRow(key = "", value = "") {
+  const row = document.createElement("div");
+  row.className = "node-text-editor-param-row";
+
+  const keyInput = document.createElement("input");
+  keyInput.type = "text";
+  keyInput.className = "node-text-editor-param-key";
+  keyInput.placeholder = "參數項目";
+  keyInput.spellcheck = false;
+  keyInput.value = String(key ?? "");
+  keyInput.dataset.role = "param-key";
+
+  const valueInput = document.createElement("input");
+  valueInput.type = "text";
+  valueInput.className = "node-text-editor-param-value";
+  valueInput.placeholder = "值";
+  valueInput.spellcheck = false;
+  valueInput.value = String(value ?? "");
+  valueInput.dataset.role = "param-value";
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "node-text-editor-param-action node-text-editor-param-add-row-btn";
+  addBtn.textContent = "＋";
+  addBtn.setAttribute("aria-label", "新增參數列");
+  addBtn.dataset.action = "add-param-row";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "node-text-editor-param-action node-text-editor-param-remove-row-btn";
+  removeBtn.textContent = "－";
+  removeBtn.setAttribute("aria-label", "刪除參數列");
+  removeBtn.dataset.action = "remove-param-row";
+
+  row.append(keyInput, valueInput, addBtn, removeBtn);
+  return row;
+}
+
+function appendNodeTextEditorParamRow(key = "", value = "", options = {}) {
+  if (!nodeTextEditorParamListEl) {
+    return null;
+  }
+  const emptyStateEl = nodeTextEditorParamListEl.querySelector(".node-text-editor-param-empty");
+  emptyStateEl?.remove();
+  const row = createNodeTextEditorParamRow(key, value);
+  const anchor = options.afterRow instanceof HTMLElement ? options.afterRow : null;
+  if (anchor && anchor.parentElement === nodeTextEditorParamListEl) {
+    anchor.insertAdjacentElement("afterend", row);
+  } else {
+    nodeTextEditorParamListEl.appendChild(row);
+  }
+  return row;
+}
+
+function syncNodeTextEditorParamsToNode(options = {}) {
+  const nodeId = state.nodeTextEditorNodeId;
+  if (!nodeId) {
+    return false;
+  }
+  const node = state.nodes.get(nodeId);
+  if (!node || !nodeTextEditorParamListEl) {
+    return false;
+  }
+
+  const rows = Array.from(nodeTextEditorParamListEl.querySelectorAll(".node-text-editor-param-row"));
+  const nextParams = rows
+    .map((row) => {
+      const keyInput = row.querySelector('[data-role="param-key"]');
+      const valueInput = row.querySelector('[data-role="param-value"]');
+      const key = String(keyInput?.value ?? "").trim();
+      const value = String(valueInput?.value ?? "");
+      return { key, value };
+    })
+    .filter((entry) => entry.key !== "" || entry.value !== "");
+
+  const previousParams = getNodeTextEditorParams(node);
+  const previousSerialized = JSON.stringify(previousParams);
+  const nextSerialized = JSON.stringify(nextParams);
+  if (previousSerialized === nextSerialized && !options.force) {
+    return false;
+  }
+
+  if (!isPlainRecord(node.metadata)) {
+    node.metadata = {};
+  }
+
+  if (nextParams.length === 0) {
+    delete node.metadata.params;
+  } else {
+    node.metadata.params = nextParams;
+  }
+
+  if (!options.skipHistory) {
+    commitHistory();
+  }
+  return true;
+}
+
+function onNodeTextEditorAddParamClick() {
+  const nodeId = state.nodeTextEditorNodeId;
+  if (!nodeId || !nodeTextEditorParamListEl) {
+    return;
+  }
+  const row = appendNodeTextEditorParamRow("", "");
+  if (!row) {
+    return;
+  }
+  const keyInput = row.querySelector('[data-role="param-key"]');
+  keyInput?.focus();
+  syncNodeTextEditorParamsToNode();
+}
+
+function onNodeTextEditorParamListClick(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  const row = target.closest(".node-text-editor-param-row");
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+  if (target.dataset.action === "add-param-row") {
+    const nextRow = appendNodeTextEditorParamRow("", "", { afterRow: row });
+    const keyInput = nextRow?.querySelector('[data-role="param-key"]');
+    keyInput?.focus();
+    syncNodeTextEditorParamsToNode();
+    return;
+  }
+  if (target.dataset.action === "remove-param-row") {
+    row.remove();
+    if (nodeTextEditorParamListEl.childElementCount === 0) {
+      renderNodeTextEditorParams(state.nodes.get(state.nodeTextEditorNodeId));
+    }
+    syncNodeTextEditorParamsToNode();
+  }
+}
+
+function onNodeTextEditorParamListInput() {
+  syncNodeTextEditorParamsToNode();
+}
+
 function hideNodeTextEditor() {
   state.nodeTextEditorNodeId = null;
   nodeTextEditorPanelEl.classList.remove("visible");
@@ -4284,6 +4473,9 @@ function hideNodeTextEditor() {
   nodeTextEditorContentTextarea.value = "";
   nodeTextEditorContentTextarea.readOnly = false;
   nodeTextEditorContentTextarea.title = "";
+  if (nodeTextEditorParamListEl) {
+    nodeTextEditorParamListEl.textContent = "";
+  }
 }
 
 function openConnectionKeyPrompt(link) {
